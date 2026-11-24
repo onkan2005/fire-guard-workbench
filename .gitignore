@@ -1,0 +1,6 @@
+.claude/
+.vercel/
+node_modules/
+__pycache__/
+*.log
+.DS_Store

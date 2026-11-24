@@ -1,0 +1,104 @@
+# Fire Guard Workbench
+
+A 3D build-and-code simulator for the ESP32 Fire Guard project (fire detection, auto-sprinkler and tank refill).
+You wire the real parts together on a 3D bench, write the real Arduino C++ sketch, press **Upload & run**,
+and watch the house, tank and pumps react.
+
+No build step and no internet needed: plain ES modules, with Three.js r160 vendored in `vendor/`.
+
+## Run it
+
+```bash
+cd ~/LaravelProjects/arduino-workshop
+./serve.sh            # no-cache server, so a normal reload always gets the latest code
+```
+
+Open <http://localhost:5173>. Any static server works, including `php -S localhost:5173`.
+To use it in a Laravel app, copy this folder into `public/workbench` and open `/workbench/`.
+
+## What you can do
+
+- **Assemble.** All parts start on the bench: ESP32 DevKit, power rails, DHT22, MQ-2 with its 10k/20k divider,
+  IR flame sensor, an HC-SR04 ultrasonic tank-level sensor above the tank (ECHO through a 1k/2k divider), 2-channel relay, 20×4 I2C LCD, an LED panel of 17 single 5 mm LEDs
+  (one per workshop state, each with a 220 Ω resistor) driven by three chained 74HC595 shift registers on GPIO23/18/13, buzzer, a 4×AAA battery holder (6 V) for the pumps,
+  and the two pumps' own red/black leads. Drag a board to move it, and press **R** (or *Rotate 90°*) to turn it.
+- **Wire.** Click a pin, then another pin, to add a jumper. Click a wire to recolor or delete it (**Del**).
+  Hover any pin to see what it is, what it connects to, and its live voltage.
+  The **Build guide** checks each step electrically, so any hole on the right rail counts. *Wire this step* and
+  *Wire everything* do it for you.
+- **Check.** The **Checks** tab is a live electrical rules check: shorts, 5 V into a GPIO, MQ-2 without the divider,
+  outputs on input-only pins (34–39), ADC2 and boot-strapping pins, missing grounds, pumps powered from the ESP32,
+  swapped SDA/SCL, and more.
+- **Code.** The editor holds a real Arduino sketch (`fire_guard.ino`). It is translated to JavaScript and runs
+  against the simulated pins, so wiring mistakes show up exactly as on real hardware: a DHT that returns `NaN`,
+  an LCD that never lights, a relay that won't click. Use **Download .ino** to flash the same sketch to your board.
+- **Simulate.** Ignite a fire, set its strength, leak gas, or drain the tank. The sensors see it, the sketch decides,
+  the relay switches the pumps, water flows, the sprinkler puts the fire out and the tank refills.
+  Turn on **Sound** for the buzzer and relay clicks.
+
+Your wires, board positions and code are saved in the browser (localStorage).
+
+## Workshop extras
+
+- **LED indicators panel** (top right of the 3D view): what each row of LEDs shows right now, in the workshop's words.
+- **Data log** tab: a row every simulated second and on every change, split into *before / during / after* the fire,
+  with a temperature + tank chart and **Download CSV**.
+- **Water sprayed**: the HUD shows litres sprayed per activation (10 L tank, so 1% = 0.1 L).
+- **● Record** saves a WebM video of the 3D view; **Screenshot** saves a PNG. Use them for the documentation video.
+
+## Simulated Arduino API
+
+`pinMode`, `digitalWrite/Read`, `analogRead` (12-bit, 0–3.3 V), `analogReadResolution`, `millis`, `micros`,
+`delay`, `map`, `constrain`, `min/max/abs`, `random`, `tone/noTone`, `ledc*`, `Serial.print/println/printf`,
+`Wire.begin(sda, scl)`, `String(...)`, plus these libraries:
+
+| Library | Class | Notes |
+|---|---|---|
+| DHT sensor library | `DHT dht(pin, DHT22)` | `readTemperature()`, `readHumidity()`; `NaN` when not wired |
+| LiquidCrystal I2C | `LiquidCrystal_I2C lcd(0x27, 20, 4)` | `init`, `backlight`, `clear`, `setCursor`, `print`; the backpack answers at 0x27 |
+| (core) | `shiftOut(data, clock, MSBFIRST, byte)` | clocks the 74HC595 chain bit by bit; pulse LATCH to show the result |
+| Adafruit NeoPixel | `Adafruit_NeoPixel strip(8, pin, NEO_GRB + NEO_KHZ800)` | `begin`, `setBrightness`, `setPixelColor`, `Color`, `ColorHSV`, `fill`, `clear`, `show` |
+| WiFi | `WiFi` | stub: pretends to connect |
+
+How the pieces behave: the relay inputs are active-LOW, the flame sensor's DO goes LOW on a flame,
+the MQ-2 AO goes up to about 4.2 V (2.8 V after the divider), and the HC-SR04 answers `pulseIn()` with the round-trip time to the water surface (distance = µs × 0.0343 / 2 cm).
+
+### Limits of the C++ translation
+
+It handles the usual sketch style (globals, functions, `#define`, arrays, `String`, casts, `for/while/switch`).
+It does not handle classes or structs you write yourself, pointers, references, `char` arithmetic, or `sprintf` into buffers.
+Integer division is only truncated when the result is stored in an integer variable (`int x = a / b;`).
+A plain `(a / b) % 2` inside an expression uses real division, so write `a % (2 * b) < b` instead.
+A missing `;` is reported like a compiler error. A loop that never calls `delay()` trips a watchdog error.
+
+## Self-test
+
+`tests/selftest.js` drives the real app and checks 127 things: wiring and checks, the default firmware, every
+workshop scenario (fire, gas, refill, LEDs, LCD, buzzer), the HC-SR04, the 74HC595 chain, miswiring detection,
+the C++ translation, timing, layouts, Inspect, Trace, the data log and saving. Open the workbench, then in the
+browser console:
+
+```js
+const t = await import('/tests/selftest.js'); await t.run();        // or t.run(['scenarios', 'hcsr04'])
+```
+
+Your saved project is restored afterwards; reload the page when it finishes.
+
+## Files
+
+```
+index.html, styles.css     page and layout
+src/main.js                UI, mouse interaction, main loop
+src/scene.js               renderer, camera, bench, diorama (house, tank, pumps, fire, water)
+src/parts.js               every part: pins, 3D model, shopping info
+src/wires.js               3D jumper wires
+src/hardware.js            nets, voltages, part behaviour, wiring checks
+src/world.js               physics: heat, fire, gas, water
+src/transpile.js           Arduino C++ → async JavaScript
+src/runtime.js             virtual-clock runner + Arduino API and libraries
+src/firmware.js            the default Fire Guard sketch
+src/guide.js               reference wiring / build steps
+vendor/three               Three.js r160 (MIT)
+```
+
+In the browser console, `__fg.simulate(5000)` advances 5 s of simulated time. This is handy when the tab is in the background.

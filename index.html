@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fire Guard Workbench</title>
+<link rel="stylesheet" href="styles.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2c1 4 6 6 6 12a6 6 0 0 1-12 0c0-3 2-5 3-6 0 2 1 3 2 3 0-4-1-6 1-9z" fill="#ff7a2f"/></svg>
+    <div><b>Fire Guard Workbench</b><small>ESP32 · assemble, wire, code and simulate in 3D</small></div>
+  </div>
+  <div class="layoutsw" role="group" aria-label="Layout">
+    <button data-layout="bench" class="on" aria-pressed="true" title="Everything laid out flat on the bench for wiring">Bench layout</button>
+    <button data-layout="assembled" aria-pressed="false" title="Sensors mounted in the house like the real build">Assembled</button>
+  </div>
+  <nav class="views" aria-label="Camera">
+    <button data-view="bench" class="on">Bench</button><button data-view="esp">ESP32</button><button data-view="leds">LEDs &amp; LCD</button><button data-view="pumps">Pumps</button><button data-view="diorama">House &amp; tank</button><button data-view="top">Top</button>
+  </nav>
+  <div class="run">
+    <button id="rec" title="Record a video of the 3D view for your documentation">● Record</button>
+    <button id="shot" title="Save a PNG screenshot of the 3D view">Screenshot</button>
+    <button id="run" class="primary" title="Compile the sketch and run it on the simulated ESP32 (Ctrl+Enter)">▶ Upload &amp; run</button>
+    <button id="stop" title="Stop the sketch">■ Stop</button>
+    <label class="sr" for="speed">Speed</label>
+    <select id="speed" title="Simulation speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option><option value="0.5">½×</option></select>
+    <span id="status" class="pill">Stopped</span>
+  </div>
+</header>
+
+<main class="app">
+  <aside class="panel left">
+    <div class="tabs" role="tablist"><button class="on" data-tab="guide">Build guide</button><button data-tab="parts">Parts &amp; cost</button></div>
+    <section class="tab on" id="tab-guide">
+      <div class="prog"><div><b id="progTxt">0 / 0 connections</b><span id="progSub" class="mu"></span></div><div class="bar"><i id="progBar"></i></div></div>
+      <div class="row"><button id="wireAll" class="primary sm">Wire everything</button><button id="clearWires" class="sm">Clear all wires</button></div>
+      <ol id="guide" class="guide"></ol>
+    </section>
+    <section class="tab" id="tab-parts"><div id="parts"></div></section>
+  </aside>
+
+  <section class="stage">
+    <div id="view"></div>
+    <div class="hint" id="hint">Click a pin, then another pin, to connect a jumper. Drag a board to move it, double-click it to inspect. Right-drag pans, scroll zooms. <kbd>Del</kbd> removes the selected wire, <kbd>Esc</kbd> cancels.</div>
+    <div id="tip" class="tip" role="status"></div>
+    <div id="selbar" class="selbar"></div>
+    <aside class="inspector" id="inspector" hidden aria-label="Part inspector"></aside>
+    <div class="tracebar" id="tracebar" role="status"></div>
+    <div class="ledpanel" id="ledpanel">
+      <button class="lp-h" id="lpToggle" aria-expanded="true"><b>LED indicators</b><span class="mu">what the LED panel shows · driven by your code</span></button>
+      <ul id="leds"></ul>
+    </div>
+    <div class="hud" id="hud">
+      <button class="hudtoggle" id="hudToggle" aria-expanded="true">Controls ▾</button>
+      <div class="hudrow">
+        <button id="bFire" class="fire">Ignite fire</button>
+        <label>Fire peak <b id="vInt">70 °C</b><input id="int" type="range" min="40" max="80" value="70"></label>
+        <label>Gas / smoke <b id="vGas">50 ppm</b><input id="gas" type="range" min="0" max="1000" step="10" value="50"></label>
+        <button id="bDrain">Drain tank −25%</button>
+        <button id="bWorld">Reset world</button>
+        <button id="bSound" aria-pressed="false">Sound off</button>
+        <button id="bGlow" aria-pressed="true" title="Signal wires glow while they carry a HIGH (3.3 V) signal">Wire glow on</button>
+      </div>
+      <div class="hudrow read" id="read"></div>
+    </div>
+  </section>
+
+  <aside class="panel right">
+    <div class="tabs" role="tablist"><button class="on" data-tab="code">Code</button><button data-tab="serial">Serial</button><button data-tab="log">Data log</button><button data-tab="checks">Checks <span id="chkBadge" class="badge"></span></button></div>
+    <section class="tab on" id="tab-code">
+      <div class="row"><span class="mu file">fire_guard.ino</span><span class="sp"></span><button id="dlIno" class="sm">Download .ino</button><button id="resetCode" class="sm">Restore default</button></div>
+      <div id="editor" class="editor"></div>
+      <div id="compile" class="compile mu">Press <b>Upload &amp; run</b> to compile and run this sketch on the simulated board.</div>
+    </section>
+    <section class="tab" id="tab-serial">
+      <div class="row"><span class="mu">115200 baud</span><span class="sp"></span><label class="chk"><input type="checkbox" id="autoscroll" checked> Autoscroll</label><button id="clrSerial" class="sm">Clear</button></div>
+      <pre id="serial" class="serial" aria-live="polite"></pre>
+    </section>
+    <section class="tab" id="tab-log">
+      <div class="row"><span class="mu small">Logged every second while the sketch runs, and on every change.</span><span class="sp"></span><button id="logCsv" class="sm">Download CSV</button><button id="logClr" class="sm">Clear</button></div>
+      <div class="phases" id="phases"></div>
+      <canvas id="logChart" class="chart" width="800" height="220" aria-label="Temperature and tank level over time"></canvas>
+      <div class="lw"><table class="log"><thead><tr><th>Time</th><th>Phase</th><th>Temp</th><th>Hum</th><th>Gas</th><th>Flame</th><th>Tank</th><th>Sprinkler</th><th>Refill</th><th>Sprayed</th><th>LEDs SPR·REF·TANK·FIRE·FUME</th><th>Buzzer</th></tr></thead><tbody id="logBody"></tbody></table></div>
+    </section>
+    <section class="tab" id="tab-checks"><p class="mu small">Live electrical rules check of your wiring. Errors would damage parts or stop the build from working.</p><ul id="checks" class="checks"></ul></section>
+  </aside>
+</main>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
