@@ -703,12 +703,33 @@ document.querySelectorAll('[data-layout]').forEach(b => b.onclick = () => {
   notice(b.dataset.layout === 'assembled' ? 'Assembled: DHT22 and MQ-2 are on the house’s back wall, the flame sensor is on the floor facing the fire. Wires stay connected.' : 'Bench layout: everything laid out flat for wiring. Drag boards to rearrange.');
 });
 setLayout(layout, false);
+
+// ---------- Reset: every board back to its default spot + the default wiring (code is kept) ----------
+function resetAll() {
+  if (layoutAnim) return;
+  insp.close(false); clearTrace(); selWire(null); selPart = null; selbar.style.display = 'none'; pending = null; wires.showBand(null);
+  for (const p of parts.values()) {
+    const [x, z, ry = 0] = p.def.pos;
+    p.bench = { x, z, ry };
+    if (p.def.fixed) continue;
+    p.group.position.set(x, (p.def.mount && p.def.mount.y) || 0, z);
+    p.group.quaternion.setFromEuler(new THREE.Euler(0, ry, 0));
+    p.group.updateMatrixWorld(true);
+  }
+  wires.clear(); hw.wires = []; hw.rebuild(); // rebuild first, or the old connections would make every guide wire look "already done"
+  for (const st of GUIDE) for (const [a, b, c] of st.wires) if (hw.net.of.get(a) !== hw.net.of.get(b)) { addWire(a, b, c, true); hw.rebuild(); }
+  setLayout(layout, false); // re-applies the current layout (sensors in the house when assembled) and re-routes every wire
+  changed();
+  S.goto(layout === 'assembled' ? 'house' : 'bench');
+  notice('Reset: every board is back in its default spot with the default wiring. Your code was not changed.');
+}
+$('resetAll').onclick = () => { if (confirm('Reset every board and wire to the default layout?\n\nThis replaces your current wiring and board positions (in both Bench layout and Assembled). Your code is kept.')) resetAll(); };
 if (migrated.length) { compileMsg(`<span class="w">Upgraded your saved project to the single-LED build: ${esc(migrated.join('; '))}.</span>`); save(); }
 requestAnimationFrame(frame);
 // handy for debugging in the console: __fg.simulate(5000) runs 5 s of virtual time without rendering
 window.__fg = {
   hw, world, rt, parts, run, S, wires, insp, editor, oldSketch: saved.oldCode, overlapping, addWire, removeWire, changed,
-  setLayout, finishLayout, traceWire, traceNet, clearTrace, LOG, save,
+  setLayout, finishLayout, resetAll, traceWire, traceNet, clearTrace, LOG, save,
   get layout() { return layout; }, get layoutBusy() { return !!layoutAnim; }, get encl() { return encl; },
   stepLayout: dt => stepLayout(dt), // lets tests finish the layout animation without waiting for frames
   simulate: async ms => { for (let t = 0; t < ms; t += 50) { if (rt.state === 'running') await rt.advance(50, step); else step(0.05); } const o = hw.evaluate(); visuals(o, 0.05, performance.now() / 1000); S.dio.update(world, o, 0.05, performance.now() / 1000); wires.update(performance.now() / 1000, null); S.render(); return o; } };

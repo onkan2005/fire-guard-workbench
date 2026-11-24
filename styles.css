@@ -15,6 +15,7 @@ kbd{background:#25313a;border:1px solid #3a4853;border-radius:4px;padding:0 4px;
 .layoutsw{display:flex;border:1px solid var(--ln);border-radius:8px;overflow:hidden}
 .layoutsw button{border:0;border-radius:0;padding:5px 11px;font-size:13px;background:var(--pn2)}
 .layoutsw button.on{background:#7a4a12;color:#fff}
+.layoutsw #resetAll{border-left:1px solid var(--ln)}
 .pill{font-size:12px;padding:3px 9px;border-radius:99px;background:#26323b;color:var(--mu);white-space:nowrap}
 .pill.running{background:#123d22;color:#7ee29b}.pill.error{background:#4a1714;color:#ff9c93}
 .app{display:grid;grid-template-columns:300px minmax(0,1fr) 430px;height:calc(100vh - 53px)}

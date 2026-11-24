@@ -8,7 +8,7 @@ import { GUIDE } from '../src/guide.js';
 import { DEFAULT_SKETCH } from '../src/firmware.js';
 
 const KEY = 'fireguard-workbench-v1';
-export const SECTIONS = ['boot', 'wiring', 'firmware', 'scenarios', 'hcsr04', 'leds', 'miswiring', 'compiler', 'runtime', 'layout', 'inspect', 'trace', 'datalog', 'persistence'];
+export const SECTIONS = ['boot', 'wiring', 'firmware', 'scenarios', 'hcsr04', 'leds', 'miswiring', 'compiler', 'runtime', 'layout', 'reset', 'inspect', 'trace', 'datalog', 'persistence'];
 
 export async function run(only = SECTIONS) {
   const fg = window.__fg; if (!fg) throw new Error('Open the workbench page first');
@@ -292,6 +292,37 @@ void loop() { delay(1000); }
       for (let i = 0; i < 3; i++) { fg.setLayout('assembled'); finishAnim(); fg.setLayout('bench'); finishAnim(); }
       const after = benchBoxes();
       ok('Toggling 3× gives exactly the same tidy wires', after.every((b, i) => b === before[i]), `${after.filter((b, i) => b !== before[i]).length} wires differ`);
+    }
+
+    if (only.includes('reset')) {
+      section = 'Reset';
+      const atDefault = () => PARTS.filter(d => !d.fixed).every(d => { const p = fg.parts.get(d.id); return near(p.bench.x, d.pos[0], 0.01) && near(p.bench.z, d.pos[1], 0.01) && near(p.bench.ry, d.pos[2] || 0, 0.01); });
+      const total = GUIDE.reduce((n, s) => n + s.wires.length, 0);
+      const mess = () => {
+        for (const id of ['esp', 'relay', 'buzz', 'dht']) { const p = fg.parts.get(id); p.bench.x += 37; p.bench.z -= 23; p.bench.ry += Math.PI / 2; p.group.position.x += 37; p.group.position.z -= 23; p.group.rotation.y += Math.PI / 2; }
+        const w = fg.hw.wires.slice(10, 16).map(x => x.id); w.forEach(id => fg.removeWire(id)); // not the first wire: that hid a bug once
+        fg.addWire('esp.26', 'rail.GND_15', '#ffffff');
+        fg.wires.recolor(fg.hw.wires[0].id, '#ffffff');
+      };
+      wireAll(); fg.setLayout('bench', false);
+      fg.resetAll();
+      ok('Reset on a fully wired bench keeps all wires', fg.hw.wires.length === total, fg.hw.wires.length);
+      mess();
+      ok('Messed up: boards moved and wires changed', !atDefault() && fg.hw.wires.length !== total);
+      fg.resetAll();
+      ok('Bench: every board back to its default spot', atDefault());
+      ok('Bench: default wiring restored', fg.hw.wires.length === total && $('progTxt').textContent === `${total} / ${total} connections`, $('progTxt').textContent);
+      ok('Bench: default wire colors restored', fg.hw.wires.every(w => { const g = GUIDE.flatMap(s => s.wires).find(([a, b]) => (a === w.a && b === w.b) || (a === w.b && b === w.a)); return g && g[2] === w.color; }));
+      ok('Bench: no wiring problems after reset', !issues().some(i => i.level !== 'info'));
+      ok('Bench: still in Bench layout, tidy routing', fg.layout === 'bench' && fg.wires.router.name === 'benchRouter');
+      mess(); fg.setLayout('assembled'); finishAnim();
+      fg.resetAll();
+      ok('Assembled: reset keeps the Assembled layout', fg.layout === 'assembled' && fg.wires.router.name === 'assembledRouter' && fg.encl.group.visible);
+      ok('Assembled: sensors stay mounted in the house', ['dht', 'mq2', 'flame'].every(id => fg.parts.get(id).group.position.toArray().map(Math.round).join() === PARTS.find(p => p.id === id).assembled.pos.map(Math.round).join()));
+      ok('Assembled: default wiring restored', fg.hw.wires.length === total);
+      fg.setLayout('bench'); finishAnim();
+      ok('…and going back to Bench uses the default spots', atDefault() && ['dht', 'mq2', 'flame'].every(id => { const p = fg.parts.get(id), d = PARTS.find(x => x.id === id); return near(p.group.position.x, d.pos[0], 0.01) && near(p.group.position.z, d.pos[1], 0.01); }));
+      ok('Reset button is in the header', !!$('resetAll'));
     }
 
     if (only.includes('inspect')) {
