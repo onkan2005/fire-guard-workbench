@@ -143,6 +143,18 @@ export async function run(only = SECTIONS) {
       ok('No overflow', fg.world.overflow < 0.5, fg.world.overflow);
       fg.world.tank = 1; await sim(600);
       ok('Empty tank: tank LED red', litIn('TANK').join() === 'Red', `${Math.round(fg.world.tank)}% ${litIn('TANK')}`);
+      // wet sensors: a short flare must not make the sprinkler chatter, and the fire class holds while things are wet
+      fg.world.tank = 80; fg.world.temp = 50; await sim(2500);
+      ok('Hot room: sprinkler starts', out().sprPump);
+      const clsHot = litIn('FIRE').join();
+      fg.world.temp = 28; await sim(1200);
+      ok('Sprinkler keeps running its minimum 5 s', out().sprPump);
+      ok('Fire class held while spraying', litIn('FIRE').join() === clsHot && clsHot !== '', `${clsHot} → ${litIn('FIRE')}`);
+      await sim(5000);
+      ok('Sprinkler stops after the minimum time', !out().sprPump);
+      ok('Fire class still held while the sensors settle', litIn('FIRE').join() === clsHot, litIn('FIRE'));
+      await sim(6000);
+      ok('Fire class clears once settled', litIn('FIRE').length === 0, litIn('FIRE'));
     }
 
     if (only.includes('hcsr04')) {
@@ -289,12 +301,15 @@ void loop() { delay(1000); }
       fg.setLayout('assembled'); finishAnim();
       const at = id => fg.parts.get(id).group.position.toArray().map(Math.round).join(',');
       ok('Assembled: DHT22 on the back wall', at('dht') === PARTS.find(p => p.id === 'dht').assembled.pos.map(Math.round).join(','), at('dht'));
-      ok('Assembled: flame sensor on the floor', at('flame') === PARTS.find(p => p.id === 'flame').assembled.pos.map(Math.round).join(','), at('flame'));
+      ok('Assembled: flame sensor on its shelf outside the window', at('flame') === PARTS.find(p => p.id === 'flame').assembled.pos.map(Math.round).join(','), at('flame'));
       ok('Assembled: control box built and visible', fg.encl && fg.encl.group.visible);
       ok('Assembled: harness routing active', fg.wires.router.name === 'assembledRouter');
+      ok('Assembled: drip shields and the flame shelf are shown', fg.S.dio.fixtures.visible);
+      ok('Assembled: flame sensor sits outside the house wall', fg.parts.get('flame').group.position.x < 25);
       const finite = [...fg.wires.items.values()].every(it => [...it.tube.geometry.attributes.position.array].every(Number.isFinite));
       ok('All wire geometry is valid', finite);
       fg.setLayout('bench'); finishAnim();
+      ok('Back to bench: drip shields hidden', !fg.S.dio.fixtures.visible);
       ok('Back to bench: sensors return to their bench spots', ['dht', 'mq2', 'flame'].every(id => { const p = fg.parts.get(id); return near(p.group.position.x, p.bench.x, 0.01) && near(p.group.position.z, p.bench.z, 0.01) && near(p.group.position.y, 0, 0.01); }));
       ok('Back to bench: control box hidden', !fg.encl.group.visible);
       for (let i = 0; i < 3; i++) { fg.setLayout('assembled'); finishAnim(); fg.setLayout('bench'); finishAnim(); }

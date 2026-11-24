@@ -63,7 +63,11 @@ const ITEMS = [
 
   I('tank', 'model', 1, 'Clear plastic container for the tank', 'With the HC-SR04: leave ≥ 2 cm between the sensor and the full water line.', 30, 80),
   I('source', 'model', 1, 'Container for the water source', 'The refill pump sits in it.', 30, 60),
-  I('house', 'model', 1, '“House”: shoebox, foam board or acrylic', 'Mount the DHT22, MQ-2 and flame sensor inside.', 0, 100),
+  I('house', 'model', 1, '“House”: shoebox, foam board or acrylic', 'DHT22 and MQ-2 go high on the back wall; the flame sensor sits outside the left wall, looking in through a window.', 0, 100),
+  I('shields', 'model', 1, 'Drip shields: a clean plastic bottle or cups', 'Cut small roofs: an awning over the DHT22 and an open-bottom hood over the MQ-2, so spray can’t drip on them but air still gets in.', 0, 20),
+  I('window', 'model', 1, 'Clear acrylic or plastic sheet (CD case, clear folder)', 'Window in the house wall for the flame sensor to look through. Check it still sees a lighter from the same distance.', 0, 40),
+  I('shelf', 'model', 1, 'Small shelf: popsicle sticks or a foam-board strip', 'Holds the flame sensor outside the house, level with the window.', 0, 20),
+  I('coat', 'model', 1, 'Clear nail polish (or keep using hot glue)', 'Paint the back of each sensor board and its pin joints against splashes. Never cover the MQ-2 mesh, the DHT22 grille or the flame sensor’s dark LED.', 30, 60),
   I('enclosure', 'model', 1, 'Project box / food container for the control electronics', 'Keeps water away from the ESP32, relay and battery.', 40, 120),
   I('glue', 'model', 1, 'Hot glue sticks', 'Mounting sensors and tubing.', 20, 40),
 
@@ -83,6 +87,7 @@ export const SAFETY = [
   ['4. 74HC595 at 5 V with 3.3 V signals', 'A 74HC595 at 5 V wants ≥ 3.5 V for a HIGH; the ESP32 gives 3.3 V. It usually works. For guaranteed results use 74HCT595 (same pinout), or the RGB/PCA9685 option.'],
   ['LED current', '330 Ω per LED ≈ 9 mA, which keeps each 74HC595 under its 70 mA total. Never connect an LED without a resistor.'],
   ['Pumps and water', 'Battery + only through the relay. A 1N4007 across each pump (stripe to +) and 100 µF across the battery. Keep every board above and away from the water; give wires a drip loop; never let water reach the HC-SR04 or probe header pins.'],
+  ['Keep the sensors dry', 'Point the sprinkler straight down over the fire. DHT22 and MQ-2 go high on the far wall under drip shields (open at the bottom so air still reaches them); the flame sensor looks in through a clear window from outside. Coat the backs of the boards, seal the pin joints and give each wire a drip loop. Water on the hot MQ-2 can crack it. The code keeps the last dry gas reading and holds the fire class while spraying and for 5 s after, and runs the sprinkler at least 5 s once it starts.'],
   ['MQ-2', 'Its heater gets warm (~50 °C): normal. It needs 1–2 minutes to warm up each time (about 24 h the very first time for accurate readings).'],
   ['Testing safely', 'Don’t light fires inside the model. Test the flame sensor with a lighter held briefly 20–30 cm away, outside the model, and the DHT22 with a hair dryer (it reads up to 80 °C).'],
   ['Before you plug in', 'Unplug USB and the battery while rewiring. With a multimeter, check that 5 V and GND are not shorted and the battery polarity is right. Check the Checks tab here first.'],

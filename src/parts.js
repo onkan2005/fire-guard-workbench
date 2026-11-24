@@ -140,7 +140,7 @@ export const PARTS = [
   {
     id: 'dht', name: 'DHT22 temperature & humidity', short: 'DHT22', pos: [-125, -78, 0],
     // Assembled: on the back wall of the house, face into the room (rot x 90° stands the board up)
-    assembled: { pos: [88, 58, -365.5], rot: [Math.PI / 2, 0, 0], where: 'back wall of the house, measuring the room air' },
+    assembled: { pos: [88, 58, -365.5], rot: [Math.PI / 2, 0, 0], where: 'back wall of the house under a drip shield, away from the spray' },
     buy: [1, 'DHT22 (AM2302) 3-pin module', 'Temperature/humidity. Reads up to 80 °C, so test with warm air, not a flame. The DHT11 is too inaccurate.', 200, 350],
     info: 'Digital one-wire sensor. The module has its own pull-up resistor. Power it from 3V3 so DATA stays at a safe 3.3 V.',
     pins: [P('VCC', '+', 12.5, -2.54, { role: 'vcc' }), P('DATA', 'OUT', 12.5, 0, { role: 'out-digital' }), P('GND', '−', 12.5, 2.54, { role: 'gnd' })],
@@ -154,7 +154,7 @@ export const PARTS = [
   },
   {
     id: 'mq2', name: 'MQ-2 gas / smoke sensor', short: 'MQ-2', pos: [-125, -25, 0],
-    assembled: { pos: [150, 74, -365.5], rot: [Math.PI / 2, 0, 0], where: 'high on the back wall, where smoke and gas collect' },
+    assembled: { pos: [150, 74, -365.5], rot: [Math.PI / 2, 0, 0], where: 'high on the back wall under an open-bottom hood, where smoke collects and spray can’t reach' },
     buy: [1, 'MQ-2 gas/smoke module', 'The fume sensor: detects gas and smoke. Its heater needs 5 V and AO can swing above 3.3 V, so it goes through the divider.', 120, 180],
     info: 'Analog output rises with gas/smoke. Needs a 20–60 s warm-up in real life. AO must go through the 10k/20k divider before the ESP32.',
     pins: [P('VCC', 'VCC', 14, -3.81, { role: 'vcc' }), P('GND', 'GND', 14, -1.27, { role: 'gnd' }), P('DO', 'DO', 14, 1.27, { role: 'out-digital' }), P('AO', 'AO', 14, 3.81, { role: 'out-analog' })],
@@ -180,8 +180,8 @@ export const PARTS = [
   },
   {
     id: 'flame', name: 'IR flame sensor', short: 'Flame', pos: [-125, 25, 0],
-    // Assembled: on the house floor, turned 180° so the IR eye points at the fire
-    assembled: { pos: [58, 8, -296], rot: [0, Math.PI, 0], where: 'on the floor, IR eye aimed at the fire' },
+    // Assembled: on a shelf OUTSIDE the house's left wall, turned 180° so the IR eye looks at the fire through a clear window (stays dry)
+    assembled: { pos: [0, 19, -298], rot: [0, Math.PI, 0], where: 'outside the left wall, looking at the fire through a clear window' },
     buy: [1, 'IR flame sensor module (LM393)', 'Sees an actual flame. DO goes LOW when a flame is detected.', 40, 80],
     info: 'Digital output from a comparator: HIGH = no flame, LOW = flame. Power it from 3V3 so DO never exceeds 3.3 V.',
     pins: [P('VCC', 'VCC', 15.5, -2.54, { role: 'vcc' }), P('GND', 'GND', 15.5, 0, { role: 'gnd' }), P('DO', 'DO', 15.5, 2.54, { role: 'out-digital' })],

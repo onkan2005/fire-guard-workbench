@@ -60,6 +60,13 @@ Print and CSV export are there too.
 
 The side panels hide with the **‹ ›** buttons on the edges of the 3D view (or the **[** and **]** keys).
 
+## Keeping the sensors dry
+
+In the Assembled layout the sprinkler sprays a narrow cone straight down over the fire. The DHT22 and MQ-2 sit high
+on the back wall under drip shields (open at the bottom so air still reaches them), and the flame sensor sits on a
+shelf outside the left wall, looking in through a clear window. The firmware runs the sprinkler at least 5 s once it
+starts, keeps the last dry gas reading while spraying, and holds the fire class while spraying and for 5 s after.
+
 ## Workshop extras
 
 - **LED indicators panel** (top right of the 3D view): what each row of LEDs shows right now, in the workshop's words.

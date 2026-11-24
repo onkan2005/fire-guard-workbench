@@ -8,7 +8,7 @@ import { World, TANK_LITRES } from './world.js';
 import { Runtime } from './runtime.js';
 import { GUIDE, autoColor, OPTIONS, DEFAULT_OPTIONS, inBuild, guideFor } from './guide.js';
 import { createEditor } from './editor.js';
-import { DEFAULT_SKETCH, buildSketch } from './firmware.js';
+import { DEFAULT_SKETCH, buildSketch, previousSketch } from './firmware.js';
 import { createShop } from './shop.js';
 
 const $ = id => document.getElementById(id);
@@ -71,7 +71,7 @@ let layoutAnim = null;
 function setLayout(mode, animate = true) {
   layout = mode;
   document.querySelectorAll('[data-layout]').forEach(b => { b.classList.toggle('on', b.dataset.layout === mode); b.setAttribute('aria-pressed', b.dataset.layout === mode); });
-  wires.router = benchRouter; if (encl) encl.group.visible = false; if (ties) ties.visible = false; wires.refreshAll();
+  wires.router = benchRouter; if (encl) encl.group.visible = false; S.dio.setAssembled(false); if (ties) ties.visible = false; wires.refreshAll();
   const items = [...parts.values()].filter(p => p.def.assembled).map(p => ({ p, from: { pos: p.group.position.clone(), quat: p.group.quaternion.clone() }, to: poseFor(p, mode) }));
   if (!animate) { items.forEach(({ p, to }) => { p.group.position.copy(to.pos); p.group.quaternion.copy(to.quat); p.group.updateMatrixWorld(true); }); finishLayout(); }
   else layoutAnim = { t: 0, items };
@@ -83,6 +83,7 @@ function finishLayout() {
   computeTrunk(ids);
   if (layout === 'assembled') { buildEnclosure(); wires.router = assembledRouter; }
   else wires.router = benchRouter;
+  S.dio.setAssembled(layout === 'assembled'); // drip shields + the flame sensor's shelf
   buildTies(); wires.refreshAll();
 }
 
@@ -115,7 +116,7 @@ function trunkRoute(a, b, seed) {
 function benchRouter(w, a, b, seed) { return a.start.distanceTo(b.start) < 40 ? shortRoute(a, b, seed) : trunkRoute(a, b, seed); }
 
 // ---------- control box + cable harnesses (Assembled layout) ----------
-const ZONE = { dht: 'house', mq2: 'house', flame: 'house', us: 'tank', probe: 'tank', pumpS: 'pumpS', pumpR: 'pumpR' };
+const ZONE = { dht: 'house', mq2: 'house', flame: 'flame', us: 'tank', probe: 'tank', pumpS: 'pumpS', pumpR: 'pumpR' };
 const zoneOf = pin => ZONE[pin.split('.')[0]] || 'box';
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 let encl = null;
@@ -145,7 +146,7 @@ function buildEnclosure() {
   encl = { group: g, minX, maxX, minZ, maxZ, h, gland };
   // cable sleeves along each harness, plus the grommet where the house harness goes through the wall
   const sleeveMat = new THREE.MeshStandardMaterial({ color: '#1f2428', transparent: true, opacity: 0.55, roughness: 0.4, depthWrite: false });
-  for (const z of ['house', 'tank', 'pumpS', 'pumpR']) {
+  for (const z of ['house', 'flame', 'tank', 'pumpS', 'pumpR']) {
     const path = harnessPath(z);
     const tube = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path, false, 'centripetal'), 160, z === 'house' ? 4.4 : 3.4, 10), sleeveMat); tube.renderOrder = 3; g.add(tube);
   }
@@ -156,6 +157,7 @@ function buildEnclosure() {
 function harnessPath(zone) {
   const G = encl.gland, up = V3(G.x, G.y + 6, G.z - 6), down = V3(G.x, 3, encl.minZ - 12);
   if (zone === 'house') return [G, up, down, V3(12, 9.5, -185), V3(12, 9.5, -338), V3(24, 24, -340), V3(36, 24, -342), V3(40, 26, -356)];
+  if (zone === 'flame') return [G, up, down, V3(12, 9.5, -185), V3(12, 9.5, -276), V3(-32, 9.5, -276), V3(-32, 30, -298)]; // outside the house, round the shelf's outer end to the sensor by the window
   if (zone === 'tank') return [G, up, down, V3(-24, 9.5, -185), V3(-24, 9.5, -248), V3(-32, 60, -258)];
   const p = parts.get(zone).group.position;
   return [G, up, down, V3(p.x + 6, 3, p.z + 14)];
@@ -200,6 +202,7 @@ for (const w of saved.wires || []) if (pinInBuild(w.a) && pinInBuild(w.b)) addWi
 hw.rebuild();
 
 // ---------- editor + runtime ----------
+if (saved.code && saved.code === previousSketch(options)) { saved.code = buildSketch(options); migrated.push('your unedited firmware was updated: the sprinkler now runs at least 5 s and wet sensor readings are held while spraying'); }
 const editor = createEditor($('editor'), saved.code || buildSketch(options), () => { clearTimeout(editor._t); editor._t = setTimeout(save, 400); });
 const serialEl = $('serial');
 function serialAdd(text, cls) {
@@ -786,7 +789,7 @@ document.querySelectorAll('[data-layout]').forEach(b => b.onclick = () => {
   insp.close(false); clearTrace();
   setLayout(b.dataset.layout);
   S.goto(b.dataset.layout === 'assembled' ? 'house' : 'bench');
-  notice(b.dataset.layout === 'assembled' ? 'Assembled: DHT22 and MQ-2 are on the house’s back wall, the flame sensor is on the floor facing the fire. Wires stay connected.' : 'Bench layout: everything laid out flat for wiring. Drag boards to rearrange.');
+  notice(b.dataset.layout === 'assembled' ? 'Assembled: DHT22 and MQ-2 sit under drip shields on the back wall, the flame sensor looks in through a window from outside, so the sprinkler can’t wet them. Wires stay connected.' : 'Bench layout: everything laid out flat for wiring. Drag boards to rearrange.');
 });
 setLayout(layout, false);
 
@@ -810,7 +813,7 @@ function resetAll() {
   notice('Reset: every board is back in its default spot with the default wiring. Your code was not changed.');
 }
 $('resetAll').onclick = () => { if (confirm('Reset every board and wire to the default layout?\n\nThis replaces your current wiring and board positions (in both Bench layout and Assembled). Your code is kept.')) resetAll(); };
-if (migrated.length) { compileMsg(`<span class="w">Upgraded your saved project to the single-LED build: ${esc(migrated.join('; '))}.</span>`); save(); }
+if (migrated.length) { compileMsg(`<span class="w">Updated your saved project: ${esc(migrated.join('; '))}.</span>`); save(); }
 requestAnimationFrame(frame);
 // handy for debugging in the console: __fg.simulate(5000) runs 5 s of virtual time without rendering
 window.__fg = {

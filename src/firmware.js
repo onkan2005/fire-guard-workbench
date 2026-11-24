@@ -62,6 +62,8 @@ const int RED[3]    = {255, 0, 0};
 const int GAS_ALARM_PPM = 300;
 const int REFILL_START  = 30;   // % tank
 const int REFILL_STOP   = 95;
+const unsigned long MIN_SPRAY_MS = 5000;  // once on, the sprinkler runs at least 5 s (no on/off chatter)
+const unsigned long SETTLE_MS    = 5000;  // after spraying, wet sensors get 5 s to settle
 ${PROBES ? `const int PROBE_PIN[4]   = {32, 33, 26, 14};  // wires at 10%, 33%, 66% and 95% of the tank
 const int PROBE_LEVEL[4] = {10, 33, 66, 95};` : `const float TANK_EMPTY_CM = 9.34; // sensor-to-water distance when the tank is empty
 const float TANK_FULL_CM  = 2.0;  // ...and when it is full (the HC-SR04 can't measure under 2 cm)`}
@@ -79,6 +81,10 @@ bool refill = false;
 unsigned long lastDht = 0;
 unsigned long lastFast = 0;
 unsigned long lastLog = 0;
+unsigned long sprayStart = 0;
+unsigned long sprayEnd = 0;
+int heldClass = 0;     // fire class shown while spraying / settling
+int dryGas = 0;        // last gas reading taken while everything was dry
 ${RGB ? `
 // Set one RGB LED. PCA9685 duty is 0..4095, so scale 0..255 by 16.
 void setRGB(int led, const int c[]) {
@@ -214,7 +220,17 @@ void loop() {
 
   // ---- decisions ----
   bool fire = flame || temperature >= (sprinkler ? 33 : 35);
-  sprinkler = fire && tankPct > 2;
+  bool wasSpraying = sprinkler;
+  if (tankPct <= 2) sprinkler = false;                        // never run the pump dry
+  else if (fire) sprinkler = true;
+  else if (sprinkler && now - sprayStart >= MIN_SPRAY_MS) sprinkler = false;
+  if (sprinkler && !wasSpraying) sprayStart = now;
+  if (!sprinkler && wasSpraying) sprayEnd = now;
+  // Spray and steam make wet sensors noisy: while spraying and for SETTLE_MS after, keep the last
+  // dry gas reading and don't let the fire class drop on a wet reading.
+  bool settling = sprinkler || (sprayEnd > 0 && now - sprayEnd < SETTLE_MS);
+  if (settling) gasPpm = dryGas;
+  else dryGas = gasPpm;
   if (tankPct <= REFILL_START) refill = true;
   if (tankPct >= REFILL_STOP) refill = false;
 
@@ -223,6 +239,12 @@ void loop() {
 
   // ---- LED indicators ----
   int cls = fireClass();
+  if (settling) {
+    if (cls > heldClass) heldClass = cls;  // it can still go up if the fire grows
+    cls = heldClass;
+  } else {
+    heldClass = cls;
+  }
 ${RGB ? `  setRGB(RGB_SPR, sprinkler ? GREEN : BLUE);
   if (!refill) setRGB(RGB_REF, OFF);
   else setRGB(RGB_REF, tankPct < 33 ? RED : tankPct < 66 ? BLUE : GREEN);
@@ -264,3 +286,13 @@ ${RGB ? `  setRGB(RGB_SPR, sprinkler ? GREEN : BLUE);
 }
 
 export const DEFAULT_SKETCH = buildSketch();
+
+// The default sketch as it was before the wet-sensor update (minimum spray time, held readings while wet).
+// Used once on load: a saved, unedited copy of it is upgraded to the current default.
+const WET_UPDATE = [
+  [/const unsigned long MIN_SPRAY_MS[^\n]*\nconst unsigned long SETTLE_MS[^\n]*\n/, ''],
+  [/unsigned long sprayStart = 0;\nunsigned long sprayEnd = 0;\nint heldClass[^\n]*\nint dryGas[^\n]*\n/, ''],
+  [/  bool wasSpraying = sprinkler;[\s\S]*?  else dryGas = gasPpm;\n/, '  sprinkler = fire && tankPct > 2;\n'],
+  [/  if \(settling\) \{\n    if \(cls > heldClass\)[\s\S]*?    heldClass = cls;\n  \}\n/, ''],
+];
+export function previousSketch(opts) { return WET_UPDATE.reduce((s, [a, b]) => s.replace(a, b), buildSketch(opts)); }

@@ -152,13 +152,38 @@ function buildDiorama(scene) {
   const wall = mat('#e8dcc8', { roughness: 0.85 });
   box(g, H.w, 2, H.d, mat('#b9a58a'), H.x, Y0, H.z);
   box(g, H.w, H.h, 4, wall, H.x, Y0, H.z - H.d / 2 + 2);
-  box(g, 4, H.h, H.d, wall, H.x - H.w / 2 + 2, Y0, H.z);
+  // left wall, with a clear window the flame sensor looks through from outside (z -310..-286, 10..34 mm up)
+  const LX = H.x - H.w / 2 + 2, WIN = { z0: -310, z1: -286, y0: 10, y1: 34 };
+  box(g, 4, H.h, WIN.z0 - (H.z - H.d / 2), wall, LX, Y0, (H.z - H.d / 2 + WIN.z0) / 2);
+  box(g, 4, H.h, H.z + H.d / 2 - WIN.z1, wall, LX, Y0, (WIN.z1 + H.z + H.d / 2) / 2);
+  box(g, 4, WIN.y0, WIN.z1 - WIN.z0, wall, LX, Y0, (WIN.z0 + WIN.z1) / 2);
+  box(g, 4, H.h - WIN.y1, WIN.z1 - WIN.z0, wall, LX, Y0 + WIN.y1, (WIN.z0 + WIN.z1) / 2);
+  const acrylic = new THREE.MeshStandardMaterial({ color: '#dff3ff', transparent: true, opacity: 0.28, roughness: 0.05, depthWrite: false, side: THREE.DoubleSide });
+  const pane = new THREE.Mesh(new THREE.BoxGeometry(1.2, WIN.y1 - WIN.y0, WIN.z1 - WIN.z0), acrylic); pane.position.set(LX, Y0 + (WIN.y0 + WIN.y1) / 2, (WIN.z0 + WIN.z1) / 2); pane.renderOrder = 2; g.add(pane);
+  const frameM = mat('#9aa3ab');
+  for (const [w, h, d, y, z] of [[5, 1.5, 26, WIN.y0 - 0.75, (WIN.z0 + WIN.z1) / 2], [5, 1.5, 26, WIN.y1 - 0.75, (WIN.z0 + WIN.z1) / 2], [5, 25.5, 1.5, WIN.y0 - 0.75, WIN.z0], [5, 25.5, 1.5, WIN.y0 - 0.75, WIN.z1]]) box(g, w, h, d, frameM, LX, Y0 + y, z);
   box(g, 4, H.h, H.d, wall, H.x + H.w / 2 - 2, Y0, H.z);
   const roofMat = new THREE.MeshStandardMaterial({ color: '#a8432f', transparent: true, opacity: 0.32, roughness: 0.7, depthWrite: false, side: THREE.DoubleSide });
   for (const s of [-1, 1]) {
     const r = new THREE.Mesh(new THREE.BoxGeometry(H.w + 14, 3, H.d / 2 / Math.cos(0.5) + 8), roofMat);
     r.rotation.x = s * 0.5; r.position.set(H.x, Y0 + H.h + Math.tan(0.5) * H.d / 4, H.z + s * H.d / 4); g.add(r);
   }
+  // fixtures that only make sense once the sensors are installed (Assembled layout)
+  const fixtures = new THREE.Group(); fixtures.visible = false; g.add(fixtures);
+  const shieldM = new THREE.MeshStandardMaterial({ color: '#f4f6f8', transparent: true, opacity: 0.6, roughness: 0.4, side: THREE.DoubleSide });
+  const plate = (w, d, x, y, z, tilt = 0.22) => { const m = shadow(new THREE.Mesh(new THREE.BoxGeometry(w, 1.2, d), shieldM)); m.position.set(x, y, z); m.rotation.x = tilt; fixtures.add(m); return m; };
+  const backZ = H.z - H.d / 2 + 4; // inside face of the back wall
+  // DHT22 (back wall, x 88, 46..70 up): an awning above it, open below and at the front so room air still reaches it
+  plate(40, 22, 88, 74, backZ + 11);
+  for (const sx of [-1, 1]) box(fixtures, 1.2, 10, 20, shieldM, 88 + sx * 20, 64, backZ + 10);
+  // MQ-2 (back wall, x 150, 62..86 up): a deeper hood like an upside-down cup with an open bottom; air gets in, drips can't
+  plate(44, 26, 150, 89, backZ + 13, 0.12);
+  { const skirt = new THREE.Mesh(new THREE.BoxGeometry(44, 9, 1.2), shieldM); skirt.position.set(150, 84, backZ + 25.5); fixtures.add(skirt); }
+  for (const sx of [-1, 1]) box(fixtures, 1.2, 17, 24, shieldM, 150 + sx * 22, 72, backZ + 12);
+  // small shelf outside the left wall for the flame sensor, which looks in through the window
+  const shelfM = mat('#c9b48f', { roughness: 0.8 });
+  box(fixtures, 46, 2, 20, shelfM, LX - 2 - 23, 17, (WIN.z0 + WIN.z1) / 2);
+  for (const dz of [-8, 8]) { const b = shadow(new THREE.Mesh(new THREE.BoxGeometry(2, 14, 2), shelfM)); b.position.set(LX - 8, 11, (WIN.z0 + WIN.z1) / 2 + dz); b.rotation.z = -0.7; fixtures.add(b); }
   // sprinkler head
   cyl(g, 2.2, 6, METAL(), 110, Y0 + 82, -310, 12); const head = cyl(g, 6, 2, METAL(), 110, Y0 + 80, -310, 16);
   // fuel + gas can
@@ -202,8 +227,8 @@ function buildDiorama(scene) {
     pumpR.rotation.y += o.refPump ? dt * 30 : 0; pumpS.rotation.y += o.sprPump ? dt * 30 : 0;
     const flowing = (list, curve, on, speed) => list.forEach((m, i) => { m.visible = on; if (on) m.position.copy(curve.getPointAt((time * speed + i / list.length) % 1)); });
     flowing(flowR, refillCurve, o.refPump, 0.35); flowing(flowS, sprCurve, w.spraying, 0.45);
-    // sprinkler drops
-    if (w.spraying) { acc += 160 * dt; while (acc >= 1) { acc--; const i = dOn.indexOf(0); if (i < 0) break; dOn[i] = 1; const a = Math.random() * Math.PI * 2, sp = 25 + Math.random() * 70; dpos.set([110, Y0 + 79, -310], i * 3); dvel.set([Math.cos(a) * sp, -10 - Math.random() * 30, Math.sin(a) * sp], i * 3); } }
+    // sprinkler drops: a downward cone over the fire, clear of the walls and the sensors
+    if (w.spraying) { acc += 160 * dt; while (acc >= 1) { acc--; const i = dOn.indexOf(0); if (i < 0) break; dOn[i] = 1; const a = Math.random() * Math.PI * 2, sp = 12 + Math.random() * 48; dpos.set([110, Y0 + 79, -310], i * 3); dvel.set([Math.cos(a) * sp, -30 - Math.random() * 40, Math.sin(a) * sp], i * 3); } }
     for (let i = 0; i < DN; i++) {
       if (!dOn[i]) { dpos[i * 3 + 1] = -9999; continue; }
       dvel[i * 3 + 1] -= 500 * dt;
@@ -223,7 +248,7 @@ function buildDiorama(scene) {
     }
     spill.material.opacity = w.overflow > 0.2 ? 0.55 : 0;
   }
-  return { group: g, update, tankAnchor: tankWall, houseAnchor: head, setLevelOption: opt => { usGroup.visible = opt === 'ultrasonic'; } };
+  return { group: g, update, tankAnchor: tankWall, houseAnchor: head, setLevelOption: opt => { usGroup.visible = opt === 'ultrasonic'; }, setAssembled: on => { fixtures.visible = on; }, fixtures };
 }
 
 function METAL() { return mat('#c4c8cf', { metalness: 0.85, roughness: 0.3 }); }
