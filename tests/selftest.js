@@ -426,19 +426,53 @@ void loop() { delay(1000); }
     }
 
     if (only.includes('checklist')) {
-      section = 'Shopping checklist';
-      const names = () => [...document.querySelectorAll('.cl .n')].map(n => n.textContent);
-      ok('Checklist lists every item for the build', document.querySelectorAll('.cl li').length === bomFor(fg.options).length, document.querySelectorAll('.cl li').length);
+      section = 'Shopping & photos';
+      const prevPage = document.body.classList.contains('page-shop') ? 'shop' : 'bench';
+      fg.showPage('shop');
+      ok('Shopping page replaces the 3D bench', !$('shopPage').hidden && getComputedStyle(document.querySelector('main.app')).display === 'none');
+      const cards = () => document.querySelectorAll('#shopPage .sc:not([data-item^="x_"])');
+      const names = () => [...cards()].map(c => c.querySelector('.n').textContent);
+      ok('Checklist lists every item for the build', cards().length === bomFor(fg.options).length, cards().length);
+      ok('Every item has a photo drop zone', [...cards()].every(c => c.querySelector('[data-ph]')));
       ok('Includes wires, passives and tools', ['Jumper wires male–female', '1N4007', '100 nF', '470 µF', 'Digital multimeter', '830-point breadboard'].every(t => names().some(n => n.includes(t))));
       ok('Default build lists 74HC595 and HC-SR04, not PCA9685 or probes', names().some(n => n.includes('74HC595')) && names().some(n => n.includes('HC-SR04')) && !names().some(n => n.includes('PCA9685')) && !names().some(n => n.includes('DIY probes')));
       fg.setOption('leds', 'rgb'); fg.setOption('level', 'probes');
       ok('Switching options updates the checklist', names().some(n => n.includes('PCA9685')) && names().some(n => n.includes('DIY probes')) && !names().some(n => n.includes('74HC595 shift')));
       fg.setOption('leds', 'single'); fg.setOption('level', 'ultrasonic');
-      const box = document.querySelector('.cl input[data-item="dht22"]'); box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
-      ok('Ticking an item is remembered', JSON.parse(localStorage.getItem('fireguard-checklist-v1') || '{}').dht22 === true && document.querySelector('.cl input[data-item="dht22"]').checked);
-      const box2 = document.querySelector('.cl input[data-item="dht22"]'); box2.checked = false; box2.dispatchEvent(new Event('change', { bubbles: true }));
+      const gotBox = () => document.querySelector('#shopPage input.got[data-item="dht22"]');
+      const wasGot = gotBox().checked;
+      const box = gotBox(); box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
+      ok('Ticking an item is remembered', JSON.parse(localStorage.getItem('fireguard-checklist-v1') || '{}').dht22 === true && gotBox().checked);
+      const box2 = gotBox(); box2.checked = false; box2.dispatchEvent(new Event('change', { bubbles: true }));
       ok('Unticking works', !JSON.parse(localStorage.getItem('fireguard-checklist-v1') || '{}').dht22);
-      ok('Safety notes are shown', /Will it blow up\?/.test($('parts').innerText) && /phone charger/.test($('parts').innerText));
+      if (wasGot) { const b = gotBox(); b.checked = true; b.dispatchEvent(new Event('change', { bubbles: true })); }
+      ok('Safety notes are shown', /Will it blow up\?/.test($('shopPage').innerText) && /phone charger/.test($('shopPage').innerText));
+      // photos: use an item that has no photo yet so the user's own pictures are never touched
+      const free = [...cards()].map(c => c.dataset.item).find(id => !fg.shop.photos[id]);
+      if (free) {
+        const cv = document.createElement('canvas'); cv.width = 1600; cv.height = 900; cv.getContext('2d').fillRect(0, 0, 1600, 900);
+        const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+        await fg.shop.setPhoto(free, new File([blob], 'test.png', { type: 'image/png' }));
+        const img = document.querySelector(`#shopPage .sc[data-item="${free}"] img`);
+        ok('A dropped photo shows on its card', !!img);
+        ok('Big photos are shrunk before saving', /^data:image\/jpeg/.test(fg.shop.photos[free] || '') && fg.shop.photos[free].length < 200000);
+        document.querySelector(`#shopPage .sc[data-item="${free}"] [data-ph]`).click();
+        ok('Clicking a photo opens the zoom viewer', !$('photoViewer').hidden);
+        dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+        ok('Esc closes the viewer', $('photoViewer').hidden);
+        document.querySelector(`#shopPage .sc[data-item="${free}"] [data-del]`).click();
+        ok('Removing a photo clears it', !fg.shop.photos[free] && !document.querySelector(`#shopPage .sc[data-item="${free}"] img`));
+      }
+      fg.showPage(prevPage);
+      ok('Back to the bench shows the 3D view', prevPage === 'shop' || ($('shopPage').hidden && getComputedStyle(document.querySelector('main.app')).display !== 'none'));
+      // hideable panels
+      const before = { ...fg.panels }, w0 = fg.S.renderer.domElement.clientWidth;
+      $('toggleLeft').click(); $('toggleRight').click();
+      ok('Panel buttons hide both side panels', document.querySelector('main.app').classList.contains('no-left') && document.querySelector('main.app').classList.contains('no-right') && !fg.panels.left === before.left);
+      await new Promise(r => setTimeout(r, 120));
+      ok('3D view grows when panels are hidden', innerWidth <= 1150 || fg.S.renderer.domElement.clientWidth > w0, `${w0} → ${fg.S.renderer.domElement.clientWidth}`);
+      $('toggleLeft').click(); $('toggleRight').click();
+      ok('Panels come back', fg.panels.left === before.left && fg.panels.right === before.right);
     }
 
     if (only.includes('persistence')) {

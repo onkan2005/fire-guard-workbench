@@ -9,7 +9,7 @@ import { Runtime } from './runtime.js';
 import { GUIDE, autoColor, OPTIONS, DEFAULT_OPTIONS, inBuild, guideFor } from './guide.js';
 import { createEditor } from './editor.js';
 import { DEFAULT_SKETCH, buildSketch } from './firmware.js';
-import { bomFor, CATEGORIES, SAFETY, CHIPS } from './bom.js';
+import { createShop } from './shop.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -298,48 +298,43 @@ $('guide').addEventListener('click', e => {
 $('wireAll').onclick = () => { for (const st of G()) for (const [a, b, c] of st.wires) if (!same(a, b)) { addWire(a, b, c, true); hw.rebuild(); } changed(); };
 $('clearWires').onclick = () => { if (!hw.wires.length || confirm('Remove all ' + hw.wires.length + ' wires?')) { wires.clear(); hw.wires = []; selWire(null); changed(); } };
 
-// ---------- parts & cost ----------
-// ---------- Parts tab: shopping checklist, safety notes, chips, part cards ----------
-const CHECK_KEY = 'fireguard-checklist-v1';
-let checked = {}; try { checked = JSON.parse(localStorage.getItem(CHECK_KEY) || '{}'); } catch { }
-const peso = n => '₱' + Math.round(n).toLocaleString();
-function renderParts() {
-  const items = bomFor(options), req = items.filter(i => !i.optional && !i.owned), opt = items.filter(i => i.optional);
-  const sum = (list, k) => list.reduce((s, i) => s + i.qty * i[k], 0);
-  const got = items.filter(i => checked[i.id] || i.owned).length;
-  const left = req.filter(i => !checked[i.id]);
-  const cats = CATEGORIES.map(([key, title]) => {
-    const list = items.filter(i => i.cat === key); if (!list.length) return '';
-    return `<h4>${esc(title)}</h4><ul class="cl">${list.map(i => `<li class="${checked[i.id] || i.owned ? 'done' : ''}">
-      <label><input type="checkbox" data-item="${i.id}" ${checked[i.id] || i.owned ? 'checked' : ''} ${i.owned ? 'disabled' : ''}>
-      <span class="q">${i.qty}×</span><span class="n">${esc(i.name)}${i.optional ? ' <em>optional</em>' : ''}${i.owned ? ' <em>you have it</em>' : ''}</span>
-      <span class="p">${i.lo ? `${peso(i.qty * i.lo)}–${peso(i.qty * i.hi)}` : '—'}</span></label><small>${esc(i.why)}</small></li>`).join('')}</ul>`;
-  }).join('');
-  const optLabel = Object.entries(OPTIONS).map(([k, o]) => o.choices[options[k]]).join(' · ');
-  $('parts').innerHTML = `
-    <section class="clbox"><div class="clhead"><b>Shopping checklist</b><span class="mu small">for your build: ${esc(optLabel)}</span></div>
-      <div class="prog"><div><b>${got} / ${items.length} items</b><span class="mu">ticked</span></div><div class="bar"><i style="width:${100 * got / items.length}%"></i></div></div>
-      <div class="tot"><span>Needed: <b>${peso(sum(req, 'lo'))}–${peso(sum(req, 'hi'))}</b></span><span>Still to buy: <b>${peso(sum(left, 'lo'))}–${peso(sum(left, 'hi'))}</b></span><span class="mu">Optional extras: ${peso(sum(opt, 'lo'))}–${peso(sum(opt, 'hi'))}</span></div>
-      <div class="row"><button class="sm" id="clPrint">Print checklist</button><button class="sm" id="clCsv">Download CSV</button><button class="sm" id="clClear">Untick all</button></div>
-      ${cats}<p class="mu small">Rough PHP prices per item; they vary by store. Change the build options in the Build guide tab and this list updates.</p></section>
-    <details class="safety" open><summary>Real build: safety & gotchas (read before wiring)</summary>${SAFETY.map(([t, d]) => `<p><b>${esc(t)}</b> ${esc(d)}</p>`).join('')}</details>
-    <details class="safety"><summary>Which chips can I use? (shift registers & “shifters”)</summary>${CHIPS.map(([t, d]) => `<p><b>${esc(t)}:</b> ${esc(d)}</p>`).join('')}</details>
-    <h4>Parts in this build <span class="mu">(click to find in 3D)</span></h4>
-    ${PARTS.filter(d => inBuild(d.option, options)).map(d => `<div class="pcard" data-part="${d.id}" tabindex="0"><h3>${esc(d.name)}</h3><p>${esc(d.info)}</p></div>`).join('')}`;
-  $('clPrint').onclick = () => { document.body.classList.add('print-checklist'); window.print(); setTimeout(() => document.body.classList.remove('print-checklist'), 500); };
-  $('clCsv').onclick = () => {
-    const rows = [['category', 'qty', 'item', 'why', 'est_min_php', 'est_max_php', 'optional', 'bought'], ...items.map(i => [CATEGORIES.find(c => c[0] === i.cat)[1], i.qty, i.name, i.why, i.qty * i.lo, i.qty * i.hi, i.optional ? 'yes' : '', checked[i.id] || i.owned ? 'yes' : ''])];
-    download(new Blob([rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')], { type: 'text/csv' }), 'fire-guard-shopping-list.csv');
-  };
-  $('clClear').onclick = () => { if (confirm('Untick every item?')) { checked = {}; try { localStorage.setItem(CHECK_KEY, '{}'); } catch { } renderParts(); } };
-}
-$('parts').addEventListener('change', e => {
-  const id = e.target.dataset && e.target.dataset.item; if (!id) return;
-  checked[id] = e.target.checked; try { localStorage.setItem(CHECK_KEY, JSON.stringify(checked)); } catch { }
-  renderParts();
+// ---------- Shopping & photos page (its own top-level page) ----------
+const optionLabel = () => Object.entries(OPTIONS).map(([k, o]) => o.choices[options[k]]).join(' · ');
+const shop = createShop({
+  getOptions: () => options, optionLabel, download,
+  partCards: () => PARTS.filter(d => inBuild(d.option, options)).map(d => `<div class="pcard" data-part="${d.id}" tabindex="0"><h3>${esc(d.name)}</h3><p>${esc(d.info)}</p></div>`).join(''),
+  onFindPart: id => { showPage('bench'); selectPart(id, true); },
 });
-$('parts').addEventListener('click', e => { const c = e.target.closest('[data-part]'); if (c) selectPart(c.dataset.part, true); });
-$('parts').addEventListener('keydown', e => { if (e.key === 'Enter') { const c = e.target.closest('[data-part]'); if (c) selectPart(c.dataset.part, true); } });
+const renderParts = () => shop.render();
+function showPage(name) {
+  const shopOn = name === 'shop';
+  $('shopPage').hidden = !shopOn; document.querySelector('main.app').hidden = shopOn;
+  document.body.classList.toggle('page-shop', shopOn);
+  document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('on', b.dataset.page === name); b.setAttribute('aria-selected', b.dataset.page === name); });
+  if (shopOn) shop.render(); else S.renderer.domElement.dispatchEvent(new Event('resize'));
+  try { localStorage.setItem('fireguard-page', name); } catch { }
+}
+document.querySelectorAll('[data-page]').forEach(b => b.onclick = () => showPage(b.dataset.page));
+
+// ---------- hideable side panels ----------
+const PANELS_KEY = 'fireguard-panels';
+let panels = { left: true, right: true }; try { panels = { ...panels, ...JSON.parse(localStorage.getItem(PANELS_KEY) || '{}') }; } catch { }
+function applyPanels() {
+  const app = document.querySelector('main.app');
+  app.classList.toggle('no-left', !panels.left); app.classList.toggle('no-right', !panels.right);
+  $('toggleLeft').textContent = panels.left ? '‹' : '›'; $('toggleLeft').title = (panels.left ? 'Hide' : 'Show') + ' the build guide panel ( [ )'; $('toggleLeft').setAttribute('aria-label', $('toggleLeft').title);
+  $('toggleRight').textContent = panels.right ? '›' : '‹'; $('toggleRight').title = (panels.right ? 'Hide' : 'Show') + ' the code panel ( ] )'; $('toggleRight').setAttribute('aria-label', $('toggleRight').title);
+  try { localStorage.setItem(PANELS_KEY, JSON.stringify(panels)); } catch { }
+}
+$('toggleLeft').onclick = () => { panels.left = !panels.left; applyPanels(); };
+$('toggleRight').onclick = () => { panels.right = !panels.right; applyPanels(); };
+applyPanels();
+addEventListener('keydown', e => {
+  if (/TEXTAREA|INPUT|SELECT/.test(document.activeElement.tagName) || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.key === '[') $('toggleLeft').click();
+  if (e.key === ']') $('toggleRight').click();
+});
+setTimeout(() => { try { if (localStorage.getItem('fireguard-page') === 'shop') showPage('shop'); } catch { } });
 
 // ---------- build options UI ----------
 function renderOptions() {
@@ -472,7 +467,7 @@ function rotatePart(id) { const p = parts.get(id); if (p.def.fixed || mounted(p)
 
 function pinTip(id) {
   const pin = pinMap.get(id), part = parts.get(pin.part);
-  const info = pin.part === 'esp' ? espPinInfo(id.split('.')[1]) : (pin.def.role || '').replace('out-', 'output, ').replace('in-', 'input, ').replace('vcc', 'power in').replace('gnd', 'ground');
+  const info = pin.part === 'esp' ? espPinInfo(id.split('.')[1]) : pin.def.tip || (pin.def.role || '').replace('out-', 'output, ').replace('in-', 'input, ').replace('vcc', 'power in').replace('gnd', 'ground');
   const others = [...new Set(hw.members(id).filter(x => x !== id).map(pinName))].filter(n => n !== pinName(id));
   const v = hw.netV(id);
   return `<b>${esc(part.def.short)} · ${esc(pin.label)}</b><span class="mu">${esc(info)}</span><br>${others.length ? 'Connected to: ' + esc(others.slice(0, 6).join(', ')) + (others.length > 6 ? '…' : '') : '<span class="mu">Not connected</span>'}<br>Now: <span class="v">${v == null ? 'floating' : v.toFixed(2) + ' V'}</span>${pending ? `<br><span class="mu">${pending === id ? 'Click another pin to finish' : 'Click to connect from ' + esc(pinName(pending))}</span>` : `<br><span class="mu">Click: start a wire · Shift+click or right-click: trace</span>`}`;
@@ -824,5 +819,5 @@ window.__fg = {
   get layout() { return layout; }, get layoutBusy() { return !!layoutAnim; }, get encl() { return encl; },
   stepLayout: dt => stepLayout(dt), // lets tests finish the layout animation without waiting for frames
   set testDriving(v) { testDriving = v; },
-  setOption, get options() { return options; }, // a self-test sets this so the animation loop stops advancing time on its own
+  setOption, get options() { return options; }, shop, showPage, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
   simulate: async ms => { testDriving = true; while (rt.busy) await new Promise(r => setTimeout(r, 0)); for (let t = 0; t < ms; t += 50) { if (rt.state === 'running') await rt.advance(50, step); else step(0.05); } const o = hw.evaluate(); visuals(o, 0.05, performance.now() / 1000); S.dio.update(world, o, 0.05, performance.now() / 1000); wires.update(performance.now() / 1000, null); S.render(); return o; } };

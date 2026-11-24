@@ -229,10 +229,17 @@ export const PARTS = [
     id: 'probe', name: 'DIY wire-probe level sensor (in the tank)', short: 'Wire probes', pos: [-40, -282, 0], mount: { y: 106 }, fixed: true, option: ['level', 'probes'],
     buy: [1, 'DIY probe: plastic stick + 5 solid-core wires (bare copper ends)', 'Five stripped wire ends at different heights: water touching a wire connects it to the bottom “common” wire. Use 22 AWG solid copper, or stainless screws so they corrode less.', 20, 60],
     info: 'Tap water conducts a little. The common wire at the bottom is pulled LOW while reading; any probe wire under water is connected to it through the water and reads LOW. The highest wet wire tells the level: 10 %, 33 %, 66 % or 95 %. Only power the common wire while reading, or the copper corrodes quickly.',
-    pins: ['COM', 'P1', 'P2', 'P3', 'P4'].map((id, i) => P(id, id === 'COM' ? 'COM' : ['10%', '33%', '66%', '95%'][i - 1], -5.08 + i * 2.54, 0, { role: id === 'COM' ? 'probe-com' : 'probe' })),
+    pins: ['COM', 'P1', 'P2', 'P3', 'P4'].map((id, i) => P(id, id === 'COM' ? 'COM' : ['10%', '33%', '66%', '95%'][i - 1], -5.08 + i * 2.54, 0, { role: id === 'COM' ? 'probe-com' : 'probe',
+      tip: id === 'COM' ? 'Common wire: the bare copper ring at the very bottom of the tank. Goes to ESP32 GPIO 25, which drives it LOW only while reading. Water connects it to every level wire it covers.'
+        : `Level wire at ${['10', '33', '66', '95'][i - 1]} % of the tank. Reads LOW when water touches it (water joins it to COM), HIGH through the 470 kΩ pull-up when dry.` })),
     build(p) {
       const g = p.inner, floorY = 9 - 106;
-      pcb(g, 20, 9, '#2b2d31', c => { p.def.pins.forEach(q => txt(c, q.label, q.x, 3.3, 0.95, '#fff')); txt(c, 'WATER PROBES', 0, -3.2, 1.3, '#cfd3d8', 'center', 700); });
+      pcb(g, 22, 13, '#2b2d31', c => {
+        p.def.pins.forEach(q => txt(c, q.id === 'COM' ? 'COM' : q.label.replace('%', ''), q.x, 2.6, 0.85, '#fff'));
+        txt(c, 'WATER PROBES', 0, -4.6, 1.3, '#cfd3d8', 'center', 700);
+        txt(c, 'COM = bottom wire → GPIO25', 0, 4.4, 0.85, '#f2c230', 'center', 700);
+        txt(c, 'others: level % wires', 0, 5.7, 0.8, '#cfd3d8', 'center');
+      });
       cyl(g, 2.4, -floorY, mat('#e9e4d8', { roughness: 0.7 }), 0, floorY, -6, 16); // the stick
       [0.02, 0.10, 0.33, 0.66, 0.95].forEach((h, i) => {
         const y = 9 + 73.4 * h - 106, col = i === 0 ? '#1d1d1d' : ['#2b8fd6', '#2fbf5b', '#f2c230', '#e5392f'][i - 1];
