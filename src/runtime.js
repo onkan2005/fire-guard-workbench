@@ -163,6 +163,24 @@ function makeApi(rt) {
     cursor() { } noCursor() { } blink() { } noBlink() { } display() { } noDisplay() { } createChar() { } scrollDisplayLeft() { } scrollDisplayRight() { }
   }
 
+  // Adafruit PWM Servo Driver library (PCA9685, I2C address 0x40 by default)
+  class Adafruit_PWMServoDriver {
+    constructor(addr = 0x40) { this.addr = addr; this.freq = 200; }
+    _link() {
+      const { sda, scl } = mcu.i2c;
+      const ok = this.addr === 0x40 && hw.gpioOn('pca.SDA') === sda && hw.gpioOn('pca.SCL') === scl && hw.vcc('pca') >= 2.3;
+      if (!ok) warnOnce('pca', `[sim] I2C: no PCA9685 answered at 0x${this.addr.toString(16).toUpperCase()} on SDA=GPIO${sda}, SCL=GPIO${scl}.` + (this.addr !== 0x40 ? ' This board is at 0x40.' : ' Check its SDA/SCL wires and power.'));
+      return ok;
+    }
+    begin() { this._link(); }
+    setPWMFreq(f) { this.freq = f; } setOscillatorFrequency() { } sleep() { } wakeup() { } reset() { if (this._link()) hw.pca.fill(0); }
+    setPWM(ch, on, off) {
+      if (ch < 0 || ch > 15 || !this._link()) return;
+      hw.pca[ch] = off >= 4096 ? 0 : on >= 4096 ? 1 : (((off - on) % 4096) + 4096) % 4096 / 4096;
+    }
+    setPin(ch, val, invert = false) { if (ch < 0 || ch > 15 || !this._link()) return; let d = Math.max(0, Math.min(4095, val)) / 4095; if (invert) d = 1 - d; hw.pca[ch] = d; }
+  }
+
   const color = (r, g, b) => (((r & 255) << 16) | ((g & 255) << 8) | (b & 255)) >>> 0;
   class Adafruit_NeoPixel {
     constructor(n = 8, p = -1) { this.n = n; this.pin = p; this.buf = new Array(n).fill(0); this.br = 255; this.started = false; }
@@ -195,7 +213,7 @@ function makeApi(rt) {
     DHT11: 11, DHT22: 22, DHT21: 21, AM2301: 21, NEO_GRB: 0x52, NEO_RGB: 0x06, NEO_RGBW: 0x1B, NEO_KHZ800: 0, NEO_KHZ400: 0x100,
     DEC: 10, HEX: 16, BIN: 2, OCT: 8, PI: Math.PI, HALF_PI: Math.PI / 2, TWO_PI: Math.PI * 2, DEG_TO_RAD: Math.PI / 180, RAD_TO_DEG: 180 / Math.PI,
     A0: 36, A3: 39, A4: 32, A5: 33, A6: 34, A7: 35, ADC_0db: 0, ADC_2_5db: 1, ADC_6db: 2, ADC_11db: 3, WL_CONNECTED: 3, WIFI_STA: 1,
-    Serial, DHT, LiquidCrystal_I2C, Adafruit_NeoPixel,
+    Serial, DHT, LiquidCrystal_I2C, Adafruit_NeoPixel, Adafruit_PWMServoDriver,
     Wire: { begin(sda, scl) { if (sda != null && scl != null) mcu.i2c = { sda, scl }; }, setClock() { } },
     WiFi: { begin() { warnOnce('wifi', '[sim] Wi-Fi is not simulated; pretending to be connected.'); }, status: () => 3, mode() { }, disconnect() { }, localIP: () => '192.168.4.2', RSSI: () => -55 },
     pinMode(p, m) {

@@ -196,7 +196,7 @@ export const PARTS = [
   },
   {
     // Mounted on a bracket above the tank, flipped so both transducers look straight down at the water.
-    id: 'us', name: 'HC-SR04 ultrasonic tank level sensor', short: 'HC-SR04', pos: [-60, -300, Math.PI], mount: { y: 118, rx: Math.PI }, fixed: true,
+    id: 'us', name: 'HC-SR04 ultrasonic tank level sensor', short: 'HC-SR04', pos: [-60, -300, Math.PI], mount: { y: 118, rx: Math.PI }, fixed: true, option: ['level', 'ultrasonic'],
     buy: [1, 'HC-SR04 ultrasonic sensor (waterproof JSN-SR04T for a real tank)', 'Measures the distance down to the water, so it works for any tank height and never touches the water.', 60, 120],
     info: 'Pulse TRIG HIGH for 10 µs; the sensor sends 8 ultrasonic pings and holds ECHO HIGH until the echo returns. pulseIn(ECHO) gives the round-trip time: distance = µs × 0.0343 / 2 cm. Needs 5 V. ECHO is 5 V too, so it goes through the 1 kΩ/2 kΩ divider to GPIO35.',
     pins: [P('VCC', 'VCC', -3.81, 10, { kind: 'edge', role: 'vcc' }), P('TRIG', 'Trig', -1.27, 10, { kind: 'edge', role: 'in-digital' }), P('ECHO', 'Echo', 1.27, 10, { kind: 'edge', role: 'out-digital' }), P('GND', 'Gnd', 3.81, 10, { kind: 'edge', role: 'gnd' })],
@@ -212,7 +212,7 @@ export const PARTS = [
     },
   },
   {
-    id: 'div2', name: '1k + 2k divider for the HC-SR04 ECHO', short: 'Echo divider', pos: [-70, 25, 0],
+    id: 'div2', name: '1k + 2k divider for the HC-SR04 ECHO', short: 'Echo divider', pos: [-70, 25, 0], option: ['level', 'ultrasonic'],
     buy: [1, '1 kΩ + 2 kΩ resistor', 'Drops the HC-SR04 ECHO from 5 V to 3.3 V for the ESP32', 2, 5],
     info: 'OUT = IN × 2 kΩ / (1 kΩ + 2 kΩ) = ⅔ of IN: the 5 V ECHO pulse becomes 3.3 V, safe for GPIO35.',
     pins: [P('IN', 'IN', -7, 0, { role: 'div-in' }), P('OUT', 'OUT', 7, -2.54, { role: 'out-analog' }), P('GND', 'GND', 7, 2.54, { role: 'gnd' })],
@@ -221,6 +221,37 @@ export const PARTS = [
       pcb(g, 20, 18, '#c79c5a', c => { c.fillStyle = '#9b7438'; for (let x = -9; x < 10; x += 2.54) for (let z = -8; z < 9; z += 2.54) { c.beginPath(); c.arc(x, z, 0.45, 0, 7); c.fill(); } hdrLabels(c, [p.def.pins[0]], 2, 1.6, 'left'); hdrLabels(c, p.def.pins.slice(1), -2, 1.6); txt(c, 'ECHO', 0, 8, 1.3, '#3b2a12', 'center', 800); });
       resistor(g, 0, -5, ['#8a4a1c', '#111', '#e5392f', '#c9a227']);  // 1k
       resistor(g, 0, 5.5, ['#e5392f', '#111', '#e5392f', '#c9a227']); // 2k
+    },
+  },
+  // ---------- option: DIY copper-wire probes in the tank ----------
+  {
+    // A plastic stick standing in the tank with bare copper wire ends at 10 / 33 / 66 / 95 % and a common wire at the bottom.
+    id: 'probe', name: 'DIY wire-probe level sensor (in the tank)', short: 'Wire probes', pos: [-40, -282, 0], mount: { y: 106 }, fixed: true, option: ['level', 'probes'],
+    buy: [1, 'DIY probe: plastic stick + 5 solid-core wires (bare copper ends)', 'Five stripped wire ends at different heights: water touching a wire connects it to the bottom “common” wire. Use 22 AWG solid copper, or stainless screws so they corrode less.', 20, 60],
+    info: 'Tap water conducts a little. The common wire at the bottom is pulled LOW while reading; any probe wire under water is connected to it through the water and reads LOW. The highest wet wire tells the level: 10 %, 33 %, 66 % or 95 %. Only power the common wire while reading, or the copper corrodes quickly.',
+    pins: ['COM', 'P1', 'P2', 'P3', 'P4'].map((id, i) => P(id, id === 'COM' ? 'COM' : ['10%', '33%', '66%', '95%'][i - 1], -5.08 + i * 2.54, 0, { role: id === 'COM' ? 'probe-com' : 'probe' })),
+    build(p) {
+      const g = p.inner, floorY = 9 - 106;
+      pcb(g, 20, 9, '#2b2d31', c => { p.def.pins.forEach(q => txt(c, q.label, q.x, 3.3, 0.95, '#fff')); txt(c, 'WATER PROBES', 0, -3.2, 1.3, '#cfd3d8', 'center', 700); });
+      cyl(g, 2.4, -floorY, mat('#e9e4d8', { roughness: 0.7 }), 0, floorY, -6, 16); // the stick
+      [0.02, 0.10, 0.33, 0.66, 0.95].forEach((h, i) => {
+        const y = 9 + 73.4 * h - 106, col = i === 0 ? '#1d1d1d' : ['#2b8fd6', '#2fbf5b', '#f2c230', '#e5392f'][i - 1];
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(2.7, 0.55, 8, 20), mat('#c87533', { metalness: 0.8, roughness: 0.35 })); ring.rotation.x = Math.PI / 2; ring.position.set(0, y, -6); g.add(ring); // bare copper
+        const lead = new THREE.CatmullRomCurve3([new THREE.Vector3(1.6 + i * 0.5, y, -4), new THREE.Vector3(1.6 + i * 0.5, PCB_Y - 4, -4.5), new THREE.Vector3(p.def.pins[i].x, PCB_Y - 1, -2)]);
+        g.add(shadow(new THREE.Mesh(new THREE.TubeGeometry(lead, 30, 0.45, 6), mat(col))));
+      });
+    },
+  },
+  {
+    id: 'pull', name: '470 kΩ pull-up board for the probes', short: 'Probe pull-ups', pos: [-70, 25, 0], option: ['level', 'probes'],
+    buy: [4, '470 kΩ resistor', 'Pull each probe wire up to 3.3 V. Water (tens of kΩ) easily pulls it LOW. The ESP32’s own 45 kΩ pull-ups are too strong for weak tap water.', 1, 2],
+    info: 'Four 470 kΩ resistors from 3V3 to each probe line. A dry probe reads HIGH (3.3 V through the resistor); a wet probe is pulled LOW by the water. A-side goes to the probes, B-side to the ESP32 (same node).',
+    pins: [P('VCC', '3V3', -10, -6.35, { role: 'vcc' }), ...[1, 2, 3, 4].map(n => P('A' + n, 'A' + n, -10, -6.35 + n * 2.54, { role: 'pull' })), ...[1, 2, 3, 4].map(n => P('B' + n, 'B' + n, 10, -6.35 + n * 2.54, { role: 'pull' }))],
+    links: [['A1', 'B1'], ['A2', 'B2'], ['A3', 'B3'], ['A4', 'B4']],
+    build(p) {
+      const g = p.inner;
+      pcb(g, 24, 20, '#c79c5a', c => { c.fillStyle = '#9b7438'; for (let x = -11; x < 12; x += 2.54) for (let z = -9; z < 10; z += 2.54) { c.beginPath(); c.arc(x, z, 0.4, 0, 7); c.fill(); } hdrLabels(c, p.def.pins.slice(0, 5), 1.8, 1.2, 'left'); hdrLabels(c, p.def.pins.slice(5), -1.8, 1.2); txt(c, '4× 470k', 0, -8, 1.4, '#3b2a12', 'center', 800); });
+      [1, 2, 3, 4].forEach(n => resistor(g, 0, -6.35 + n * 2.54, ['#e8c32f', '#7a3fb0', '#e8c32f', '#c9a227']).scale.set(0.55, 0.55, 0.55)); // 470k: yellow violet yellow
     },
   },
   {
@@ -262,7 +293,7 @@ export const PARTS = [
     },
   },
   {
-    id: 'sr', name: 'LED driver: 3× 74HC595 shift registers', short: 'LED driver', pos: [30, 118, 0],
+    id: 'sr', name: 'LED driver: 3× 74HC595 shift registers', short: 'LED driver', pos: [30, 118, 0], option: ['leds', 'single'],
     buy: [3, '74HCT595 shift register (74HC595 also works)', 'Three chained chips give 24 outputs from just 3 ESP32 pins (DATA, CLOCK, LATCH). 17 are used for the LEDs.', 15, 30],
     info: 'Three 74HC595 chips on a perfboard, chained (Q7′ of one → DS of the next), OE tied to GND and MR to VCC. shiftOut() 3 bytes, then pulse LATCH, and Q0–Q16 light the LEDs. Use 74HCT595 at 5 V so the 3.3 V ESP32 signals are read reliably.',
     pins: [P('VCC', 'VCC', -27, -5.08, { role: 'vcc' }), P('GND', 'GND', -27, -2.54, { role: 'gnd' }), P('DATA', 'DATA', -27, 0, { role: 'in-digital' }), P('CLOCK', 'CLOCK', -27, 2.54, { role: 'in-digital' }), P('LATCH', 'LATCH', -27, 5.08, { role: 'in-digital' }),
@@ -282,9 +313,9 @@ export const PARTS = [
     },
   },
   {
-    id: 'panel', name: 'LED indicator panel (17 single 5 mm LEDs)', short: 'LED panel', pos: [130, 104, 0],
+    id: 'panel', name: 'LED indicator panel (17 single 5 mm LEDs)', short: 'LED panel', pos: [130, 104, 0], option: ['leds', 'single'],
     buy: [17, '5 mm LED (5 green, 4 blue, 4 red, 3 orange, 1 yellow)','One single-color LED per state, as the workshop asks: sprinkler, refill, tank level, fire class and fume sensor.', 2, 4],
-    info: 'Every LED has its own lane: pin Ln → 220 Ω resistor → LED + (long leg). Each LED’s − leg drops onto its row’s GND rail; the rails join the GND spine on the right. Rows: SPRINKLER (green on, blue standby) · REFILL (red 1/3, blue 2/3, green full) · TANK (red empty, orange almost empty, blue half, green full) · FIRE CLASS (green low → red extreme) · FUME (green normal, orange gas, red fire).',
+    info: 'Every LED has its own lane: pin Ln → 330 Ω resistor → LED + (long leg). Each LED’s − leg drops onto its row’s GND rail; the rails join the GND spine on the right. Rows: SPRINKLER (green on, blue standby) · REFILL (red 1/3, blue 2/3, green full) · TANK (red empty, orange almost empty, blue half, green full) · FIRE CLASS (green low → red extreme) · FUME (green normal, orange gas, red fire).',
     pins: [...Array.from({ length: 17 }, (_, i) => P('L' + i, 'L' + i, PANEL.pinX, PANEL.byIndex[i].lane, { role: 'in-digital' })), P('GND', 'GND', PANEL.pinX, PANEL.gndZ, { role: 'gnd' })],
     build(p) {
       const g = p.inner, Lp = PANEL;
@@ -304,7 +335,7 @@ export const PARTS = [
         }
         cu([[Lp.spineX, Lp.rows[0].rail], [Lp.spineX, Lp.gndZ], [Lp.pinX, Lp.gndZ]], 1.1, 'rgba(160,176,188,.9)');
         txt(c, 'GND', Lp.pinX - 1.7, Lp.gndZ, 1.1, '#cfd8de', 'right', 700);
-        txt(c, '220 Ω', (Lp.resL + Lp.resR) / 2, Lp.rows[0].top - 0.6, 1.3, '#d8c49a', 'center', 700);
+        txt(c, '330 Ω', (Lp.resL + Lp.resR) / 2, Lp.rows[0].top - 0.6, 1.3, '#d8c49a', 'center', 700);
       });
       p.refs.leds = []; const glow = softSprite('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
       Lp.rows.forEach(r => r.leds.forEach(l => {
@@ -320,6 +351,61 @@ export const PARTS = [
         h.position.set(x, TOP + 8, z); h.scale.set(16, 16, 1); g.add(h);
         p.refs.leds[l.i] = { m, h };
       }));
+    },
+  },
+  // ---------- option: 5 RGB LEDs on a PCA9685 16-channel PWM board ----------
+  {
+    id: 'pca', name: 'PCA9685 16-channel PWM board (LED driver)', short: 'PCA9685', pos: [30, 118, 0], option: ['leds', 'rgb'],
+    buy: [1, 'PCA9685 16-channel 12-bit PWM board (I2C, 0x40)', 'Drives the 5 RGB LEDs (15 channels) with real PWM, so orange and yellow are possible. Uses the LCD’s I2C wires, no extra ESP32 pins. Most boards already have a 220 Ω resistor on every output.', 180, 300],
+    info: 'An I2C PWM chip: the ESP32 sends “channel n, brightness x” over SDA/SCL (address 0x40) and the board keeps all 16 outputs pulsing at 1 kHz by itself. Each output already has a 220 Ω series resistor. The I2C/power pins on the left are passed through to the right side for chaining.',
+    pins: [...['GND', 'OE', 'SCL', 'SDA', 'VCC', 'VP'].map((id, i) => P(id, id === 'VP' ? 'V+' : id, -28.5, -6.35 + i * 2.54, { role: { GND: 'gnd', VCC: 'vcc', SDA: 'i2c', SCL: 'i2c' }[id] || 'in-digital' })),
+      ...['GND', 'OE', 'SCL', 'SDA', 'VCC', 'VP'].map((id, i) => P(id + '2', id === 'VP' ? 'V+' : id, 28.5, -6.35 + i * 2.54, { role: 'pass' })),
+      ...Array.from({ length: 16 }, (_, n) => P('PWM' + n, String(n), -19.05 + n * 2.54, 10, { role: 'out-pwm' }))],
+    links: [['GND', 'GND2'], ['OE', 'OE2'], ['SCL', 'SCL2'], ['SDA', 'SDA2'], ['VCC', 'VCC2'], ['VP', 'VP2']],
+    build(p) {
+      const g = p.inner;
+      pcb(g, 62, 26, '#3b2a7a', c => {
+        hdrLabels(c, p.def.pins.slice(0, 6), 2, 1.3); hdrLabels(c, p.def.pins.slice(6, 12), -2, 1.3);
+        p.def.pins.slice(12).forEach(q => txt(c, q.label, q.x, 7, 1.1, '#fff'));
+        txt(c, 'PCA9685 16-CH PWM', 0, -9, 1.8, '#fff', 'center', 800);
+      });
+      box(g, 10, 1.6, 10, BLACK(), 0, TOP, -2); // the chip
+      decal(g, 9, 9, c => { txt(c, 'PCA9685', 0, 0, 1.5, '#d8d8d8', 'center', 700); }, 0, TOP + 1.62, -2);
+      for (let n = 0; n < 16; n++) box(g, 2.5, 2.5, 5, BLACK(), -19.05 + n * 2.54, TOP, 6.2); // V+/GND rows behind each PWM pin
+      for (let i = 0; i < 16; i++) smd(g, -19.05 + i * 2.54, 2.6, '#222', 1.6, 0.9); // the 220 Ω resistors
+    },
+  },
+  {
+    id: 'rgb', name: 'RGB LED panel (5 common-cathode RGB LEDs)', short: 'RGB panel', pos: [130, 104, 0], option: ['leds', 'rgb'],
+    buy: [5, 'RGB LED 5 mm common cathode (4 legs)', 'One RGB LED per indicator: it can show green, blue, yellow, orange and red, so 5 LEDs replace all 17.', 8, 15],
+    info: 'Each RGB LED has a red, a green and a blue LED inside sharing one cathode (the longest leg, to GND). Mixing their brightness from the PCA9685 gives any colour: yellow = red + some green, orange = red + a little green.',
+    pins: [...Array.from({ length: 15 }, (_, n) => { const led = Math.floor(n / 3), k = 'RGB'[n % 3]; return P(k + led, k + led, -31, -19.05 + n * 2.54, { role: 'in-digital' }); }), P('GND', 'GND', -31, -19.05 + 15 * 2.54, { role: 'gnd' })],
+    build(p) {
+      const g = p.inner, rows = [-24, -12, -1, 10, 24];
+      pcb(g, 70, 66, '#1e3a2f', c => {
+        hdrLabels(c, p.def.pins, -1.8, 1.05, 'right');
+        const cu = (pts, col = 'rgba(214,170,84,.75)', w = 0.6) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); pts.forEach(([x, z], k) => k ? c.lineTo(x, z) : c.moveTo(x, z)); c.stroke(); };
+        rows.forEach((rz, r) => {
+          for (let k = 0; k < 3; k++) {
+            const zp = -19.05 + (3 * r + k) * 2.54, xk = -20 + r * 4 + k * 1.2, leg = [4.1, 6.6, 7.9][k], zh = rz + 3 + k * 1.2;
+            cu([[-31, zp], [xk, zp], [xk, zh], [leg, zh], [leg, rz]], ['rgba(229,57,47,.85)', 'rgba(47,191,91,.85)', 'rgba(47,125,225,.85)'][k]);
+          }
+          cu([[5.4, rz], [5.4, rz - 4], [30, rz - 4]], 'rgba(160,176,188,.85)', 0.8);
+          txt(c, LED_GROUPS[r].title, 14, rz, 2.1, '#fff', 'left', 800);
+        });
+        cu([[30, rows[0] - 4], [30, 30], [-25, 30], [-25, 19.05], [-31, 19.05]], 'rgba(160,176,188,.9)', 1);
+        txt(c, 'GND BUS', 20, 31.6, 1.3, '#cfd8de');
+      });
+      p.refs.rgb = []; const glow = softSprite('rgba(255,255,255,1)', 'rgba(255,255,255,0)');
+      rows.forEach(rz => {
+        const m = new THREE.MeshStandardMaterial({ color: '#e8eef2', emissive: '#000000', transparent: true, opacity: 0.85, roughness: 0.2 });
+        cyl(g, 2.9, 1, m, 6, TOP + 3, rz, 20); cyl(g, 2.5, 4.5, m, 6, TOP + 4, rz, 20);
+        const dome = shadow(new THREE.Mesh(new THREE.SphereGeometry(2.5, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), m)); dome.position.set(6, TOP + 8.5, rz); g.add(dome);
+        for (const lx of [4.1, 5.4, 6.6, 7.9]) box(g, 0.4, 3, 0.4, METAL(), lx, TOP, rz);
+        const h = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, color: '#000000', transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+        h.position.set(6, TOP + 8, rz); h.scale.set(18, 18, 1); g.add(h);
+        p.refs.rgb.push({ m, h });
+      });
     },
   },
   {
@@ -397,7 +483,7 @@ function pumpLeads(p) {
 export const EXTRA_BUY = [
   [1, 'Silicone tubing 1 m + mini spray nozzle', 'Carries the water and acts as the sprinkler head', 60, 120],
   [2, '1N4007 diode', 'Across each pump to absorb voltage spikes', 4, 10],
-  [17, '220 Ω resistor', 'One in series with each indicator LED to limit its current', 1, 2],
+  [17, '330 Ω resistor', 'One in series with each indicator LED to limit its current', 1, 2],
   [1, 'Perfboard 7×9 cm (×2)', 'Holds the three 74HC595 chips and the LED panel', 30, 60],
   [3, 'Jumper wire packs (M-M, M-F, F-F)', 'All the connections', 50, 70],
   [1, 'Water container + small box for the “house”', 'Tank, water source and a place to mount sensors', 50, 150],

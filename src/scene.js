@@ -119,13 +119,13 @@ function buildDiorama(scene) {
   }
   label('TANK', T.x, T.z + 60);
   // bracket across the rim that holds the HC-SR04 above the water, and its ping (a faint sound cone)
-  const brMat = mat('#e9e4d8', { roughness: 0.6 });
-  box(g, 2 * T.r + 8, 3, 6, brMat, T.x, Y0 + T.h, T.z - 14);
-  for (const sx of [-1, 1]) box(g, 3, 120 - (Y0 + T.h + 3), 3, brMat, T.x + sx * 19, Y0 + T.h + 3, T.z - 12);
-  box(g, 46, 2, 26, brMat, T.x, 118, T.z - 1); // the sensor hangs under this plate
+  const brMat = mat('#e9e4d8', { roughness: 0.6 }), usGroup = new THREE.Group(); g.add(usGroup); // only in the HC-SR04 build
+  box(usGroup, 2 * T.r + 8, 3, 6, brMat, T.x, Y0 + T.h, T.z - 14);
+  for (const sx of [-1, 1]) box(usGroup, 3, 120 - (Y0 + T.h + 3), 3, brMat, T.x + sx * 19, Y0 + T.h + 3, T.z - 12);
+  box(usGroup, 46, 2, 26, brMat, T.x, 118, T.z - 1); // the sensor hangs under this plate
   const coneGeo = new THREE.CylinderGeometry(4, 15, 1, 24, 1, true); coneGeo.translate(0, -0.5, 0);
   const pingMat = new THREE.MeshBasicMaterial({ color: '#7fe3ff', transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
-  const beams = [-13, 13].map(dx => { const m = new THREE.Mesh(coneGeo, pingMat); m.position.set(T.x - dx, Y0 + 3 + FACE, T.z - 1); g.add(m); return m; });
+  const beams = [-13, 13].map(dx => { const m = new THREE.Mesh(coneGeo, pingMat); m.position.set(T.x - dx, Y0 + 3 + FACE, T.z - 1); usGroup.add(m); return m; });
   let pingA = 0;
 
   // pumps (submersible)
@@ -217,7 +217,7 @@ function buildDiorama(scene) {
     }
     spill.material.opacity = w.overflow > 0.2 ? 0.55 : 0;
   }
-  return { group: g, update, tankAnchor: tankWall, houseAnchor: head };
+  return { group: g, update, tankAnchor: tankWall, houseAnchor: head, setLevelOption: opt => { usGroup.visible = opt === 'ultrasonic'; } };
 }
 
 function METAL() { return mat('#c4c8cf', { metalness: 0.85, roughness: 0.3 }); }

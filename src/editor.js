@@ -1,6 +1,6 @@
 // Lightweight C++ editor: textarea over a highlighted <pre>, with line numbers and error marking.
 const KW = /\b(if|else|for|while|do|switch|case|default|break|continue|return|const|static|volatile|unsigned|signed|true|false|HIGH|LOW|INPUT|OUTPUT|INPUT_PULLUP|nullptr|NULL)\b/;
-const TY = /\b(void|int|float|double|bool|boolean|long|short|byte|char|word|size_t|String|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|DHT|LiquidCrystal_I2C|Adafruit_NeoPixel)\b/;
+const TY = /\b(void|int|float|double|bool|boolean|long|short|byte|char|word|size_t|String|uint8_t|uint16_t|uint32_t|uint64_t|int8_t|int16_t|int32_t|int64_t|DHT|LiquidCrystal_I2C|Adafruit_NeoPixel|Adafruit_PWMServoDriver)\b/;
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 function highlight(src) {

@@ -17,9 +17,11 @@ export function buildNets(pins, links) {
 export class Hardware {
   constructor(world) {
     this.world = world; this.wires = []; this.allPins = []; this.internal = []; this.label = {};
+    this.active = null; // Set of part ids in the current build options (null = all)
     for (const d of PARTS) {
       for (const p of d.pins) { const id = d.id + '.' + p.id; this.allPins.push(id); this.label[id] = (d.short || d.id) + ' ' + p.label; }
       for (const [pre, n] of d.internal || []) for (let i = 1; i < n; i++) this.internal.push([d.id + '.' + pre + '0', d.id + '.' + pre + i]);
+      for (const [a, b] of d.links || []) this.internal.push([d.id + '.' + a, d.id + '.' + b]); // pass-through pins on the same board
     }
     this.resetMCU(); this.rebuild();
   }
@@ -28,6 +30,7 @@ export class Hardware {
     this.lcd = { rows: [' '.repeat(20), ' '.repeat(20), ' '.repeat(20), ' '.repeat(20)], init: false, backlight: false, cx: 0, cy: 0 };
     this.pixels = new Array(8).fill(0);
     this.sr = { shift: new Array(24).fill(0), out: new Array(24).fill(0) }; // three chained 74HC595
+    this.pca = new Array(16).fill(0); // PCA9685 duty per channel, 0..1
     this.warned = new Set();
   }
   // Called by the runtime whenever a GPIO output changes level: clocks the 74HC595 chain on rising edges.
@@ -54,6 +57,7 @@ export class Hardware {
     for (const p of m) if (SUP[p]) return SUP[p][1];
     if (!worst) for (const p of m) { const g = PIN_GPIO[p]; if (g !== undefined && this.mcu.mode[g] === 'OUTPUT') return this.mcu.level[g] ? 3.3 : 0; }
     for (const p of m) { const d = DRIVERS[p]; if (d) { const v = d(this, seen, worst ? WORST : this.world, worst); if (v != null) return v; } }
+    for (const p of m) { const d = WEAK[p]; if (d) { const v = d(this, seen, worst); if (v != null) return v; } } // pull-up resistors lose to any real driver
     if (worst) for (const p of m) if (PIN_GPIO[p] !== undefined && !INPUT_ONLY.includes(PIN_GPIO[p])) return 3.3;
     return null;
   }
@@ -99,6 +103,9 @@ export class Hardware {
     o.mqLed = this.vcc('mq2') > 2.5 && w.gasPpm >= 400;
     o.flameLed = this.vcc('flame') > 2.5 && w.flameVisible;
     o.usPowered = this.vcc('us') >= 4.5;
+    // RGB LEDs: brightness of each colour from the voltage on its leg (PWM average)
+    const rg = this.isGround('rgb.GND');
+    o.rgb = [0, 1, 2, 3, 4].map(i => [0, 1, 2].map(k => { if (!rg) return 0; const v = this.netV('rgb.' + 'RGB'[k] + i); return v == null ? 0 : Math.max(0, Math.min(1, v / (k ? 4.5 : 3))); }));
     return o;
   }
 
@@ -134,14 +141,27 @@ export class Hardware {
     }
     const NEED5 = { us: 'the HC-SR04 needs 5 V and will not echo reliably', mq2: 'its heater needs 5 V, readings will be far too low', relay: 'the relay coils need 5 V and will not click', lcd: 'the text will be very faint' };
     for (const d of PARTS) {
-      if (['esp', 'rail', 'pumpS', 'pumpR', 'div'].includes(d.id)) continue;
-      const hasV = d.pins.some(p => p.id === 'VCC');
+      if (['esp', 'rail', 'pumpS', 'pumpR', 'div'].includes(d.id) || (this.active && !this.active.has(d.id))) continue;
+      const hasV = d.pins.some(p => p.id === 'VCC') && d.pins.some(p => p.id === 'GND'); // pull-up boards have no GND pin
       const anyWire = d.pins.some(p => this.connected(d.id + '.' + p.id));
       if (!anyWire) { add('info', d.id, `${d.short} is not wired yet.`); continue; }
       if (hasV && this.connected(d.id + '.VCC') && !this.isGround(d.id + '.GND')) add('warn', d.id, `${d.short}: GND is not connected, so it gets no power.`);
       const v = this.vcc(d.id, new Set(), true);
       if (NEED5[d.id] && v > 0 && v < 4.5) add('warn', d.id, `${d.short} is on ${v} V: ${NEED5[d.id]}.`);
     }
+    const on = id => !this.active || this.active.has(id);
+    // DIY probes: each probe line needs a strong pull-up; the common wire should not sit on GND all the time
+    if (on('probe')) for (let k = 1; k <= 4; k++) {
+      const m = this.members('probe.P' + k), g = this.gpioOn('probe.P' + k);
+      if (g == null) continue;
+      if (!m.some(x => x.startsWith('pull.'))) add(INPUT_ONLY.includes(g) ? 'error' : 'info', 'probe', INPUT_ONLY.includes(g) ? `GPIO${g} has no internal pull-up, so probe ${k} floats when dry. Go through the 470k pull-up board.` : `Probe ${k} uses the ESP32's internal ~45k pull-up, which weak tap water may not pull LOW. The 470k pull-up board is more reliable.`);
+    }
+    if (on('probe') && this.isGround('probe.COM')) add('info', 'probe', 'The probe common wire is on GND all the time: constant current through the water corrodes the copper fast. Drive it from a GPIO only while reading.');
+    if (on('pca') && this.connected('pca.OE') && (this.netV('pca.OE') ?? 0) > 1.5) add('warn', 'pca', 'PCA9685 OE is HIGH, which switches all its outputs off. Leave OE unconnected or tie it to GND.');
+    if (on('rgb')) { const miss = Array.from({ length: 15 }, (_, n) => 'RGB'[n % 3] + Math.floor(n / 3)).filter(x => !this.connected('rgb.' + x)); if (miss.length && miss.length < 15) add('warn', 'rgb', `RGB LED leg${miss.length > 1 ? 's' : ''} ${miss.join(', ')} ${miss.length > 1 ? 'are' : 'is'} not connected to the PCA9685.`); if (this.connected('rgb.R0') && !this.isGround('rgb.GND')) add('warn', 'rgb', 'The RGB panel GND (common cathode) is not connected, so no LED can light.'); }
+    // real-world notes (info only): 5 V I2C pull-ups and 3.3 V logic into a 5 V 74HC595
+    if (on('lcd') && this.vcc('lcd', new Set(), true) >= 4.5 && this.gpioOn('lcd.SDA') != null) add('info', 'lcd', 'The LCD backpack pulls SDA/SCL up to 5 V (4.7k resistors). It usually works, but the ESP32 is a 3.3 V chip: add a 4-channel I2C level shifter in a real build (see Safety notes).');
+    if (on('sr') && this.vcc('sr', new Set(), true) >= 4.5) add('info', 'sr', 'A 74HC595 at 5 V needs about 3.5 V for HIGH; the ESP32 gives 3.3 V. It usually works, but a 74HCT595 (same pinout) is guaranteed to.');
     const srv = this.vcc('sr', new Set(), true);
     if (srv > 0 && srv < 4.5) add('info', 'sr', 'The LED driver runs on 3.3 V: blue and green LEDs (about 3 V forward voltage) will be very dim. Use 5 V.');
     const unl = Array.from({ length: 17 }, (_, i) => i).filter(i => !this.connected('panel.L' + i));
@@ -174,4 +194,20 @@ const DRIVERS = {
   'div2.OUT': (hw, seen, env, worst) => { const vin = hw.netV('div2.IN', seen, worst); if (vin == null) return null; return hw.isGround('div2.GND') ? vin * 2 / 3 : vin; },
   'div.OUT': (hw, seen, env, worst) => { const vin = hw.netV('div.IN', seen, worst); if (vin == null) return null; return hw.isGround('div.GND') ? vin * 2 / 3 : vin; },
 };
-for (let i = 0; i < 17; i++) DRIVERS['sr.Q' + i] = (hw, seen, env, worst) => { const v = hw.vcc('sr', seen, worst); if (!v) return null; return worst || hw.sr.out[i] ? v : 0; };
+// PCA9685 outputs: average PWM voltage (duty × VCC); OE pulled HIGH switches them all off
+for (let n = 0; n < 16; n++) DRIVERS['pca.PWM' + n] = (hw, seen, env, worst) => {
+  const v = hw.vcc('pca', seen, worst); if (!v) return null;
+  if (worst) return v;
+  if (hw.connected('pca.OE') && (hw.netV('pca.OE', seen) ?? 0) > 1.5) return 0;
+  return v * hw.pca[n];
+};
+// DIY probes: a wire under water is connected (through the water) to the common wire; if that is LOW, so is the probe
+const PROBE_H = [0.10, 0.33, 0.66, 0.95];
+for (let k = 1; k <= 4; k++) DRIVERS['probe.P' + k] = (hw, seen, env, worst) => {
+  if (worst || env.tank < PROBE_H[k - 1] * 100 || env.tank < 2) return null;
+  const com = hw.netV('probe.COM', seen); return com != null && com < 0.8 ? 0.15 : null;
+};
+// Weak drivers: pull-up resistors only set the level when nothing stronger drives the line
+const WEAK = {};
+for (let k = 1; k <= 4; k++) for (const s of ['A', 'B']) WEAK['pull.' + s + k] = (hw, seen) => { const v = hw.netV('pull.VCC', seen); return v != null && v >= 2.5 ? v : null; };
+for (let i = 0; i < 17; i++) DRIVERS['sr.Q' + i] =(hw, seen, env, worst) => { const v = hw.vcc('sr', seen, worst); if (!v) return null; return worst || hw.sr.out[i] ? v : 0; };

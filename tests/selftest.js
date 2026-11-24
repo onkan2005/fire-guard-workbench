@@ -4,11 +4,12 @@
 //   await t.run(['scenarios']);                                             // one or more sections
 // Your saved project is backed up first and restored at the end (reload the page afterwards).
 import { PARTS, LED_SPEC } from '../src/parts.js';
-import { GUIDE } from '../src/guide.js';
+import { guideFor, DEFAULT_OPTIONS } from '../src/guide.js';
+import { bomFor } from '../src/bom.js';
 import { DEFAULT_SKETCH } from '../src/firmware.js';
 
 const KEY = 'fireguard-workbench-v1';
-export const SECTIONS = ['boot', 'wiring', 'firmware', 'scenarios', 'hcsr04', 'leds', 'miswiring', 'compiler', 'runtime', 'layout', 'reset', 'inspect', 'trace', 'datalog', 'persistence'];
+export const SECTIONS = ['boot', 'wiring', 'firmware', 'scenarios', 'hcsr04', 'leds', 'miswiring', 'compiler', 'runtime', 'layout', 'reset', 'inspect', 'trace', 'datalog', 'options', 'checklist', 'persistence'];
 
 export async function run(only = SECTIONS) {
   const fg = window.__fg; if (!fg) throw new Error('Open the workbench page first');
@@ -16,7 +17,7 @@ export async function run(only = SECTIONS) {
   const results = []; let section = '';
   const ok = (name, pass, detail = '') => results.push({ section, name, pass: !!pass, detail: typeof detail === 'string' ? detail : JSON.stringify(detail) });
   const sim = ms => fg.simulate(ms);
-  const backup = localStorage.getItem(KEY);
+  const backup = localStorage.getItem(KEY), backupChecklist = localStorage.getItem('fireguard-checklist-v1');
   const lcd = () => fg.hw.lcd.rows.map(r => r.trimEnd());
   const out = () => fg.hw.evaluate();
   const lit = () => out().leds.map((on, i) => on ? LED_SPEC[i].g + ':' + LED_SPEC[i].name : null).filter(Boolean);
@@ -35,6 +36,9 @@ export async function run(only = SECTIONS) {
   const near = (a, b, tol) => Math.abs(a - b) <= tol;
   const t0 = performance.now();
 
+  const realConfirm = window.confirm; window.confirm = () => true; // option switches ask about the code; tests always accept
+  for (const [k, v] of Object.entries(DEFAULT_OPTIONS)) if (fg.options[k] !== v) fg.setOption(k, v);
+  const GUIDE = guideFor(fg.options);
   if (fg.layout !== 'bench') { fg.setLayout('bench', false); }
   fg.insp.close(false); fg.clearTrace();
 
@@ -62,7 +66,11 @@ export async function run(only = SECTIONS) {
       buzz.position.copy(fg.parts.get('panel').group.position); buzz.updateMatrixWorld(true);
       ok('Overlap guard detects a board on top of another', fg.overlapping('buzz') === 'panel', fg.overlapping('buzz'));
       buzz.position.copy(prev); buzz.updateMatrixWorld(true);
-      ok('Default layout has no overlapping boards', [...fg.parts.keys()].every(id => !fg.overlapping(id)));
+      const noOverlap = () => [...fg.parts.keys()].filter(id => fg.parts.get(id).group.visible).every(id => !fg.overlapping(id));
+      ok('Default layout has no overlapping boards', noOverlap());
+      fg.setOption('leds', 'rgb'); fg.setOption('level', 'probes');
+      ok('RGB + probes layout has no overlapping boards', noOverlap());
+      fg.setOption('leds', 'single'); fg.setOption('level', 'ultrasonic'); wireAll();
     }
 
     if (only.includes('firmware')) {
@@ -373,6 +381,66 @@ void loop() { delay(1000); }
       ok('Rows record LED states', fg.LOG.every(r => r.leds.length === 5));
     }
 
+    if (only.includes('options')) {
+      section = 'Build options';
+      const visible = () => [...fg.parts.values()].filter(p => p.group.visible).map(p => p.id);
+      const total = () => guideFor(fg.options).reduce((n, s) => n + s.wires.length, 0);
+      const ind = () => [...$('leds').querySelectorAll('li')].map(li => li.querySelector('.lm').textContent);
+      wireAll(); fg.world.reset();
+      // RGB LEDs + PCA9685
+      fg.setOption('leds', 'rgb');
+      ok('RGB: PCA9685 + RGB panel shown, 74HC595 + 17-LED panel hidden', visible().includes('pca') && visible().includes('rgb') && !visible().includes('sr') && !visible().includes('panel'), visible());
+      ok('RGB: its wiring was added and the guide is complete', $('progTxt').textContent === `${total()} / ${total()} connections`, $('progTxt').textContent);
+      ok('RGB: no wiring errors or warnings', !issues().some(i => i.level !== 'info'), issues().filter(i => i.level !== 'info').map(i => i.msg));
+      ok('RGB: code switched to the PCA9685 firmware', /Adafruit_PWMServoDriver pwm/.test(fg.editor.value) && !/shiftOut/.test(fg.editor.value));
+      let r = await runCode(fg.editor.value, 3000);
+      ok('RGB: compiles and runs with no [sim] warnings', r.state === 'running' && !/\[sim\]/.test(r.serial), (r.serial.match(/\[sim\][^\n]*/g) || []).join(' | '));
+      ok('RGB idle: sprinkler blue, fume green, fire off', /^Blue/.test(ind()[0]) && /^Green/.test(ind()[4]) && /^off/.test(ind()[3]), ind());
+      fg.world.intensity = 80; fg.world.ignite(); await sim(8000);
+      ok('RGB fire: sprinkler green, fume red, fire class lit', /^Green/.test(ind()[0]) && /^Red/.test(ind()[4]) && !/^off/.test(ind()[3]), ind());
+      const seen = new Set(); fg.world.extinguish(); fg.world.temp = 80; for (let i = 0; i < 40; i++) { await sim(500); seen.add(ind()[3].split(' ')[0]); }
+      ok('RGB: fire class shows orange/yellow as real mixed colours while cooling', seen.has('Orange') || seen.has('Yellow'), [...seen]);
+      // DIY probes
+      fg.world.reset(); fg.setOption('level', 'probes');
+      ok('Probes: probe stick + pull-up board shown, HC-SR04 hidden', visible().includes('probe') && visible().includes('pull') && !visible().includes('us') && !visible().includes('div2'), visible());
+      ok('Probes: guide complete, no errors or warnings', $('progTxt').textContent === `${total()} / ${total()} connections` && !issues().some(i => i.level !== 'info'), issues().filter(i => i.level !== 'info').map(i => i.msg));
+      r = await runCode(fg.editor.value, 2500);
+      ok('Probes: compiles and runs', r.state === 'running' && /PROBE_PIN/.test(fg.editor.value), r.compile.slice(0, 80));
+      const levels = [];
+      for (const [t, want] of [[97, 95], [70, 66], [40, 33]]) { fg.world.tank = t; await sim(500); const m = /TANK:(\d+)%/.exec(lcd()[1]); levels.push(`${t}%→${m && m[1]}`); ok(`Probes: ${t}% water reads ${want}%`, m && +m[1] === want, lcd()[1]); }
+      fg.world.tank = 15; await sim(500);
+      ok('Probes: below 1/3 the refill pump starts', out().refPump, `${Math.round(fg.world.tank)}% ${lcd()[1]}`);
+      await sim(25000);
+      ok('Probes: refill stops once the 95% wire is wet', !out().refPump && fg.world.tank >= 94, Math.round(fg.world.tank) + '%');
+      await withWires(l => drop(drop(l, 'probe.P2', 'pull.A2'), 'pull.B2', 'esp.33').concat([{ a: 'probe.P2', b: 'esp.33' }]), async () => {
+        ok('Probes: wire without the 470k pull-up is flagged', hasIssue('internal ~45k pull-up'), issues().map(i => i.msg));
+      });
+      await withWires(l => drop(l, 'probe.COM', 'esp.25').concat([{ a: 'probe.COM', b: 'rail.GND_14' }]), async () => {
+        ok('Probes: common wire on GND all the time is flagged (corrosion)', hasIssue('corrodes'), issues().map(i => i.msg));
+      });
+      // back to the default build
+      fg.setOption('leds', 'single'); fg.setOption('level', 'ultrasonic');
+      ok('Back to default: 74HC595 + HC-SR04 build restored', visible().includes('sr') && visible().includes('us') && !visible().includes('pca') && !visible().includes('probe'));
+      ok('Back to default: guide complete again', $('progTxt').textContent === `${total()} / ${total()} connections`, $('progTxt').textContent);
+      ok('Back to default: code is the 74HC595 + HC-SR04 firmware', /shiftOut/.test(fg.editor.value) && /pulseIn/.test(fg.editor.value));
+    }
+
+    if (only.includes('checklist')) {
+      section = 'Shopping checklist';
+      const names = () => [...document.querySelectorAll('.cl .n')].map(n => n.textContent);
+      ok('Checklist lists every item for the build', document.querySelectorAll('.cl li').length === bomFor(fg.options).length, document.querySelectorAll('.cl li').length);
+      ok('Includes wires, passives and tools', ['Jumper wires male–female', '1N4007', '100 nF', '470 µF', 'Digital multimeter', '830-point breadboard'].every(t => names().some(n => n.includes(t))));
+      ok('Default build lists 74HC595 and HC-SR04, not PCA9685 or probes', names().some(n => n.includes('74HC595')) && names().some(n => n.includes('HC-SR04')) && !names().some(n => n.includes('PCA9685')) && !names().some(n => n.includes('DIY probes')));
+      fg.setOption('leds', 'rgb'); fg.setOption('level', 'probes');
+      ok('Switching options updates the checklist', names().some(n => n.includes('PCA9685')) && names().some(n => n.includes('DIY probes')) && !names().some(n => n.includes('74HC595 shift')));
+      fg.setOption('leds', 'single'); fg.setOption('level', 'ultrasonic');
+      const box = document.querySelector('.cl input[data-item="dht22"]'); box.checked = true; box.dispatchEvent(new Event('change', { bubbles: true }));
+      ok('Ticking an item is remembered', JSON.parse(localStorage.getItem('fireguard-checklist-v1') || '{}').dht22 === true && document.querySelector('.cl input[data-item="dht22"]').checked);
+      const box2 = document.querySelector('.cl input[data-item="dht22"]'); box2.checked = false; box2.dispatchEvent(new Event('change', { bubbles: true }));
+      ok('Unticking works', !JSON.parse(localStorage.getItem('fireguard-checklist-v1') || '{}').dht22);
+      ok('Safety notes are shown', /Will it blow up\?/.test($('parts').innerText) && /phone charger/.test($('parts').innerText));
+    }
+
     if (only.includes('persistence')) {
       section = 'Saving';
       wireAll(); fg.save();
@@ -385,8 +453,10 @@ void loop() { delay(1000); }
   } catch (e) {
     ok('Test run crashed', false, e.stack || String(e));
   } finally {
-    fg.rt.stop(); fg.insp.close(false); fg.clearTrace();
+    for (const [k, v] of Object.entries(DEFAULT_OPTIONS)) if (fg.options[k] !== v) fg.setOption(k, v);
+    fg.rt.stop(); fg.insp.close(false); fg.clearTrace(); fg.testDriving = false; window.confirm = realConfirm;
     if (backup != null) localStorage.setItem(KEY, backup); else localStorage.removeItem(KEY);
+    if (backupChecklist != null) localStorage.setItem('fireguard-checklist-v1', backupChecklist); else localStorage.removeItem('fireguard-checklist-v1');
   }
   const passed = results.filter(r => r.pass).length, failed = results.length - passed;
   console.table(results);

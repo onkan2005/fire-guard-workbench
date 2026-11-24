@@ -31,7 +31,7 @@ const GROUPS = {
     ['out3', 'U3 outputs', NET.out, 'U3 only uses its Q0, output pin Q16 → L16 (fume, red). Its Q1–Q7 are spare for future LEDs.'],
     ['all', 'Everything', '#cfd8de', 'All 45 internal connections at once.'],
   ],
-  panel: [['all', 'All rows', '#cfd8de', 'Every LED has its own straight lane: pin Ln → 220 Ω resistor → along the lane → LED + (long leg). The LED’s − leg (short) drops onto its row’s gray GND rail, and all rails join the GND spine on the right. Lanes never cross: the farther the LED, the farther its lane.'],
+  panel: [['all', 'All rows', '#cfd8de', 'Every LED has its own straight lane: pin Ln → 330 Ω resistor → along the lane → LED + (long leg). The LED’s − leg (short) drops onto its row’s gray GND rail, and all rails join the GND spine on the right. Lanes never cross: the farther the LED, the farther its lane.'],
     ...LED_GROUPS.map(g => [g.key, g.name, LED_SPEC.find(l => l.g === g.key).color, `${g.name} row: ${LED_SPEC.map((l, i) => l.g === g.key ? `L${i} ${l.name} = ${l.label}` : null).filter(Boolean).join(', ')}.`])],
   div: [['all', 'Divider', NET.sig, 'IN → 10 kΩ → OUT → 20 kΩ → GND. OUT is the middle point: ⅔ of IN.']],
 };

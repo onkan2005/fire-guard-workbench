@@ -40,6 +40,21 @@ To use it in a Laravel app, copy this folder into `public/workbench` and open `/
 
 Your wires, board positions and code are saved in the browser (localStorage).
 
+## Build options
+
+Pick them at the top of the **Build guide** tab; the 3D parts, wiring guide, firmware and shopping list all follow.
+
+| Option | Choice A (default) | Choice B |
+|---|---|---|
+| LED indicators | 17 single 5 mm LEDs on three chained **74HC595** shift registers (DATA 23, CLOCK 18, LATCH 13), 330 Ω each | 5 common-cathode **RGB LEDs** on a **PCA9685** 16-channel PWM board sharing the LCD's I2C bus (real orange/yellow by mixing) |
+| Tank level | **HC-SR04** ultrasonic above the tank (TRIG 25, ECHO 35 through a 1k/2k divider) | **DIY wire probes**: bare copper wires at 10/33/66/95 % (GPIO 32/33/26/14 through 470 kΩ pull-ups), common wire on GPIO25 driven LOW only while reading |
+
+## Shopping checklist & safety
+
+The **Parts & cost** tab has a tickable shopping checklist for the chosen build (modules, resistors,
+capacitors, diodes, wires, consumables, tools) with PHP estimates, print and CSV export, plus
+**Real build: safety & gotchas** and **Which chips can I use?** notes.
+
 ## Workshop extras
 
 - **LED indicators panel** (top right of the 3D view): what each row of LEDs shows right now, in the workshop's words.

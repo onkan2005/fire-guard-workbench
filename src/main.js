@@ -6,9 +6,10 @@ import { createInspector, groupForPin } from './inspect.js';
 import { Hardware } from './hardware.js';
 import { World, TANK_LITRES } from './world.js';
 import { Runtime } from './runtime.js';
-import { GUIDE, autoColor } from './guide.js';
+import { GUIDE, autoColor, OPTIONS, DEFAULT_OPTIONS, inBuild, guideFor } from './guide.js';
 import { createEditor } from './editor.js';
-import { DEFAULT_SKETCH } from './firmware.js';
+import { DEFAULT_SKETCH, buildSketch } from './firmware.js';
+import { bomFor, CATEGORIES, SAFETY, CHIPS } from './bom.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -40,12 +41,23 @@ for (const [id, pos] of Object.entries(saved.pos || {})) { const p = parts.get(i
 // every part remembers its bench spot separately, so "Assembled" can move it away and bring it back
 for (const p of parts.values()) p.bench = { x: p.group.position.x, z: p.group.position.z, ry: p.group.rotation.y };
 let layout = saved.layout === 'assembled' ? 'assembled' : 'bench';
+// ---------- build options (LED type, tank level sensor) ----------
+let options = { ...DEFAULT_OPTIONS, ...(saved.options || {}) };
+const isActive = p => inBuild(p.def.option, options);
+const G = () => guideFor(options); // guide steps for the current build
+function applyOptions() {
+  hitMeshes.length = 0; bodyMeshes.length = 0; // only parts in the current build can be clicked
+  for (const p of parts.values()) { const on = isActive(p); p.group.visible = on; if (on) { for (const pin of p.pins.values()) hitMeshes.push(pin.hit); bodyMeshes.push(...p.bodies); } }
+  hw.active = new Set([...parts.values()].filter(isActive).map(p => p.id));
+  S.dio.setLevelOption(options.level);
+}
+applyOptions();
 S.scene.updateMatrixWorld(true);
 let wid = 0;
 function save() {
   try {
     const pos = {}; for (const [id, p] of parts) pos[id] = [p.bench.x, p.bench.z, p.bench.ry];
-    localStorage.setItem(KEY, JSON.stringify({ v: SAVE_V, wires: hw.wires.map(({ a, b, color }) => ({ a, b, color })), code: editor.value, pos, layout }));
+    localStorage.setItem(KEY, JSON.stringify({ v: SAVE_V, wires: hw.wires.map(({ a, b, color }) => ({ a, b, color })), code: editor.value, pos, layout, options }));
   } catch { }
 }
 
@@ -67,7 +79,7 @@ function setLayout(mode, animate = true) {
 }
 // once everything has landed: lay out the cable loom (and the box + harnesses when assembled), then re-route every wire
 function finishLayout() {
-  const ids = [...parts.values()].filter(p => !p.def.fixed && (layout === 'bench' || zoneOf(p.id + '.') === 'box')).map(p => p.id);
+  const ids = [...parts.values()].filter(p => isActive(p) && !p.def.fixed && (layout === 'bench' || zoneOf(p.id + '.') === 'box')).map(p => p.id);
   computeTrunk(ids);
   if (layout === 'assembled') { buildEnclosure(); wires.router = assembledRouter; }
   else wires.router = benchRouter;
@@ -103,14 +115,14 @@ function trunkRoute(a, b, seed) {
 function benchRouter(w, a, b, seed) { return a.start.distanceTo(b.start) < 40 ? shortRoute(a, b, seed) : trunkRoute(a, b, seed); }
 
 // ---------- control box + cable harnesses (Assembled layout) ----------
-const ZONE = { dht: 'house', mq2: 'house', flame: 'house', us: 'tank', pumpS: 'pumpS', pumpR: 'pumpR' };
+const ZONE = { dht: 'house', mq2: 'house', flame: 'house', us: 'tank', probe: 'tank', pumpS: 'pumpS', pumpR: 'pumpR' };
 const zoneOf = pin => ZONE[pin.split('.')[0]] || 'box';
 const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 let encl = null;
 function buildEnclosure() {
   if (encl) { S.scene.remove(encl.group); encl.group.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
   const bb = new THREE.Box3();
-  for (const p of parts.values()) if (zoneOf(p.id + '.') === 'box') bb.union(footprint(p.id));
+  for (const p of parts.values()) if (isActive(p) && zoneOf(p.id + '.') === 'box') bb.union(footprint(p.id));
   const m = 12, minX = bb.min.x - m, maxX = bb.max.x + m, minZ = bb.min.z - m, maxZ = bb.max.z + m, h = 60; // tall enough to hide the loom
   const w = maxX - minX, d = maxZ - minZ, cx = (minX + maxX) / 2, cz = (minZ + maxZ) / 2;
   const g = new THREE.Group();
@@ -183,11 +195,12 @@ function addWire(a, b, color, quiet) {
 }
 function removeWire(id) { hw.wires = hw.wires.filter(w => w.id !== id); wires.remove(id); selWire(null); changed(); }
 function changed() { hw.rebuild(); renderGuide(); renderChecks(); save(); if (typeof tracedWire !== 'undefined' && tracedWire) traceWire(tracedWire); else if (typeof tracedPin !== 'undefined' && tracedPin) traceNet(tracedPin); }
-for (const w of saved.wires || []) addWire(w.a, w.b, w.color, true);
+const pinInBuild = id => { const p = parts.get(id.split('.')[0]); return p && isActive(p); };
+for (const w of saved.wires || []) if (pinInBuild(w.a) && pinInBuild(w.b)) addWire(w.a, w.b, w.color, true);
 hw.rebuild();
 
 // ---------- editor + runtime ----------
-const editor = createEditor($('editor'), saved.code || DEFAULT_SKETCH, () => { clearTimeout(editor._t); editor._t = setTimeout(save, 400); });
+const editor = createEditor($('editor'), saved.code || buildSketch(options), () => { clearTimeout(editor._t); editor._t = setTimeout(save, 400); });
 const serialEl = $('serial');
 function serialAdd(text, cls) {
   const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; serialEl.appendChild(d);
@@ -247,7 +260,7 @@ function setStatus() {
 const clock = ms => { const s = Math.floor(ms / 1000); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
 $('run').onclick = run;
 $('stop').onclick = () => { rt.stop(); hw.resetMCU(); serialAdd('Sketch stopped.', 'sys'); setStatus(); };
-$('resetCode').onclick = () => { if (confirm('Replace your sketch with the default Fire Guard firmware?')) { editor.value = DEFAULT_SKETCH; save(); } };
+$('resetCode').onclick = () => { if (confirm('Replace your sketch with the default Fire Guard firmware for this build?')) { editor.value = buildSketch(options); save(); } };
 $('dlIno').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([editor.value], { type: 'text/plain' })); a.download = 'fire_guard.ino'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
 $('clrSerial').onclick = () => { serialEl.innerHTML = ''; };
 let speed = 1; $('speed').onchange = e => { speed = +e.target.value; };
@@ -267,7 +280,7 @@ const same = (a, b) => hw.net.of.get(a) === hw.net.of.get(b);
 const pinName = id => hw.label[id] || id;
 function renderGuide() {
   let done = 0, total = 0;
-  $('guide').innerHTML = GUIDE.map((st, i) => {
+  $('guide').innerHTML = G().map((st, i) => {
     const ok = st.wires.map(([a, b]) => same(a, b)); const n = ok.filter(Boolean).length; done += n; total += ok.length;
     return `<li class="${n === ok.length ? 'done' : ''}"><h3><span class="n">${n === ok.length ? '✓' : i + 1}</span>${esc(st.title)}</h3><p>${esc(st.why)}</p>
       <ul>${st.wires.map(([a, b, c], k) => `<li data-a="${a}" data-b="${b}" class="${ok[k] ? 'ok' : ''}"><span class="dot" style="background:${c}"></span>${esc(pinName(a))} → ${esc(pinName(b))}</li>`).join('')}</ul>
@@ -278,25 +291,78 @@ function renderGuide() {
 }
 $('guide').addEventListener('click', e => {
   const b = e.target.closest('button[data-step]');
-  if (b) { for (const [a, c, col] of GUIDE[+b.dataset.step].wires) if (!same(a, c)) addWire(a, c, col, true); changed(); return; }
+  if (b) { for (const [a, c, col] of G()[+b.dataset.step].wires) if (!same(a, c)) addWire(a, c, col, true); changed(); return; }
   const li = e.target.closest('li[data-a]');
   if (li) { flash([li.dataset.a, li.dataset.b]); S.focus(pinMap.get(li.dataset.b).anchor, 160); }
 });
-$('wireAll').onclick = () => { for (const st of GUIDE) for (const [a, b, c] of st.wires) if (!same(a, b)) { addWire(a, b, c, true); hw.rebuild(); } changed(); };
+$('wireAll').onclick = () => { for (const st of G()) for (const [a, b, c] of st.wires) if (!same(a, b)) { addWire(a, b, c, true); hw.rebuild(); } changed(); };
 $('clearWires').onclick = () => { if (!hw.wires.length || confirm('Remove all ' + hw.wires.length + ' wires?')) { wires.clear(); hw.wires = []; selWire(null); changed(); } };
 
 // ---------- parts & cost ----------
-(function renderParts() {
-  const peso = n => '₱' + n.toLocaleString();
-  let lo = 0, hi = 0, rows = '';
-  const items = PARTS.filter(d => d.buy).map(d => d.buy).concat(EXTRA_BUY);
-  for (const [q, n, , a, b] of items) { lo += q * a; hi += q * b; rows += `<tr><td>${q}×</td><td>${esc(n)}</td><td>${peso(q * a)}–${peso(q * b)}</td></tr>`; }
-  $('parts').innerHTML = PARTS.map(d => `<div class="pcard" data-part="${d.id}" tabindex="0"><h3>${esc(d.name)}</h3><p>${esc(d.info)}</p>${d.buy ? `<div class="buy">Buy: ${d.buy[0]}× ${esc(d.buy[1])} · about ₱${d.buy[3]}–${d.buy[4]} each</div>` : d.owned ? '<div class="buy">You already own this.</div>' : ''}</div>`).join('')
-    + `<h3 style="margin:10px 0 0;font-size:14px">Shopping list</h3><table class="shop"><tr><th>Qty</th><th>Item</th><th>Est.</th></tr>${rows}<tr><th></th><th>Total (without ESP32)</th><th>${peso(lo)}–${peso(hi)}</th></tr></table>
-    <p class="mu small">Rough PHP prices. Check Makerlab, E-Gizmo, Circuit Rocket, Shopee or Lazada. The relay must be the opto-isolated 2-channel board, the buzzer must be active, the LCD 20×4 with I2C backpack.</p>`;
-  $('parts').addEventListener('click', e => { const c = e.target.closest('[data-part]'); if (c) selectPart(c.dataset.part, true); });
-  $('parts').addEventListener('keydown', e => { if (e.key === 'Enter') { const c = e.target.closest('[data-part]'); if (c) selectPart(c.dataset.part, true); } });
-})();
+// ---------- Parts tab: shopping checklist, safety notes, chips, part cards ----------
+const CHECK_KEY = 'fireguard-checklist-v1';
+let checked = {}; try { checked = JSON.parse(localStorage.getItem(CHECK_KEY) || '{}'); } catch { }
+const peso = n => '₱' + Math.round(n).toLocaleString();
+function renderParts() {
+  const items = bomFor(options), req = items.filter(i => !i.optional && !i.owned), opt = items.filter(i => i.optional);
+  const sum = (list, k) => list.reduce((s, i) => s + i.qty * i[k], 0);
+  const got = items.filter(i => checked[i.id] || i.owned).length;
+  const left = req.filter(i => !checked[i.id]);
+  const cats = CATEGORIES.map(([key, title]) => {
+    const list = items.filter(i => i.cat === key); if (!list.length) return '';
+    return `<h4>${esc(title)}</h4><ul class="cl">${list.map(i => `<li class="${checked[i.id] || i.owned ? 'done' : ''}">
+      <label><input type="checkbox" data-item="${i.id}" ${checked[i.id] || i.owned ? 'checked' : ''} ${i.owned ? 'disabled' : ''}>
+      <span class="q">${i.qty}×</span><span class="n">${esc(i.name)}${i.optional ? ' <em>optional</em>' : ''}${i.owned ? ' <em>you have it</em>' : ''}</span>
+      <span class="p">${i.lo ? `${peso(i.qty * i.lo)}–${peso(i.qty * i.hi)}` : '—'}</span></label><small>${esc(i.why)}</small></li>`).join('')}</ul>`;
+  }).join('');
+  const optLabel = Object.entries(OPTIONS).map(([k, o]) => o.choices[options[k]]).join(' · ');
+  $('parts').innerHTML = `
+    <section class="clbox"><div class="clhead"><b>Shopping checklist</b><span class="mu small">for your build: ${esc(optLabel)}</span></div>
+      <div class="prog"><div><b>${got} / ${items.length} items</b><span class="mu">ticked</span></div><div class="bar"><i style="width:${100 * got / items.length}%"></i></div></div>
+      <div class="tot"><span>Needed: <b>${peso(sum(req, 'lo'))}–${peso(sum(req, 'hi'))}</b></span><span>Still to buy: <b>${peso(sum(left, 'lo'))}–${peso(sum(left, 'hi'))}</b></span><span class="mu">Optional extras: ${peso(sum(opt, 'lo'))}–${peso(sum(opt, 'hi'))}</span></div>
+      <div class="row"><button class="sm" id="clPrint">Print checklist</button><button class="sm" id="clCsv">Download CSV</button><button class="sm" id="clClear">Untick all</button></div>
+      ${cats}<p class="mu small">Rough PHP prices per item; they vary by store. Change the build options in the Build guide tab and this list updates.</p></section>
+    <details class="safety" open><summary>Real build: safety & gotchas (read before wiring)</summary>${SAFETY.map(([t, d]) => `<p><b>${esc(t)}</b> ${esc(d)}</p>`).join('')}</details>
+    <details class="safety"><summary>Which chips can I use? (shift registers & “shifters”)</summary>${CHIPS.map(([t, d]) => `<p><b>${esc(t)}:</b> ${esc(d)}</p>`).join('')}</details>
+    <h4>Parts in this build <span class="mu">(click to find in 3D)</span></h4>
+    ${PARTS.filter(d => inBuild(d.option, options)).map(d => `<div class="pcard" data-part="${d.id}" tabindex="0"><h3>${esc(d.name)}</h3><p>${esc(d.info)}</p></div>`).join('')}`;
+  $('clPrint').onclick = () => { document.body.classList.add('print-checklist'); window.print(); setTimeout(() => document.body.classList.remove('print-checklist'), 500); };
+  $('clCsv').onclick = () => {
+    const rows = [['category', 'qty', 'item', 'why', 'est_min_php', 'est_max_php', 'optional', 'bought'], ...items.map(i => [CATEGORIES.find(c => c[0] === i.cat)[1], i.qty, i.name, i.why, i.qty * i.lo, i.qty * i.hi, i.optional ? 'yes' : '', checked[i.id] || i.owned ? 'yes' : ''])];
+    download(new Blob([rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')], { type: 'text/csv' }), 'fire-guard-shopping-list.csv');
+  };
+  $('clClear').onclick = () => { if (confirm('Untick every item?')) { checked = {}; try { localStorage.setItem(CHECK_KEY, '{}'); } catch { } renderParts(); } };
+}
+$('parts').addEventListener('change', e => {
+  const id = e.target.dataset && e.target.dataset.item; if (!id) return;
+  checked[id] = e.target.checked; try { localStorage.setItem(CHECK_KEY, JSON.stringify(checked)); } catch { }
+  renderParts();
+});
+$('parts').addEventListener('click', e => { const c = e.target.closest('[data-part]'); if (c) selectPart(c.dataset.part, true); });
+$('parts').addEventListener('keydown', e => { if (e.key === 'Enter') { const c = e.target.closest('[data-part]'); if (c) selectPart(c.dataset.part, true); } });
+
+// ---------- build options UI ----------
+function renderOptions() {
+  $('opts').innerHTML = `<b>Build options</b>` + Object.entries(OPTIONS).map(([k, o]) => `<div class="optrow"><span class="mu">${esc(o.title)}</span><div class="seg" role="group" aria-label="${esc(o.title)}">${Object.entries(o.choices).map(([v, label]) => `<button class="sm ${options[k] === v ? 'on' : ''}" data-opt="${k}" data-val="${v}" aria-pressed="${options[k] === v}">${esc(label)}</button>`).join('')}</div></div>`).join('');
+}
+function setOption(key, val) {
+  if (options[key] === val || layoutAnim) return;
+  const oldSketch = buildSketch(options), wasRunning = rt.state === 'running';
+  insp.close(false); clearTrace(); selWire(null); pending = null; wires.showBand(null);
+  options = { ...options, [key]: val };
+  let removed = 0;
+  for (const w of [...hw.wires]) if (!pinInBuild(w.a) || !pinInBuild(w.b)) { hw.wires = hw.wires.filter(x => x !== w); wires.remove(w.id); removed++; }
+  applyOptions(); hw.rebuild();
+  if (removed) for (const st of G()) if (st.option && st.option[0] === key) for (const [a, b, c] of st.wires) if (hw.net.of.get(a) !== hw.net.of.get(b)) { addWire(a, b, c, true); hw.rebuild(); }
+  let note = '';
+  if (editor.value === oldSketch) { editor.value = buildSketch(options); note = ' The code was switched to match.'; }
+  else if (confirm('Your code was edited. Replace it with the default firmware for the new build?\n\nOK = switch the code (recommended). Cancel = keep your code (it will need changes for the new parts).')) { editor.value = buildSketch(options); note = ' The code was switched to match.'; }
+  setLayout(layout, false); changed(); renderOptions(); renderParts(); renderLedPanel();
+  if (wasRunning) run(); else { rt.stop(); hw.resetMCU(); }
+  notice(`${OPTIONS[key].title}: ${OPTIONS[key].choices[val]}.${removed ? ' Its wiring was added.' : ''}${note}`);
+}
+$('opts').addEventListener('click', e => { const b = e.target.closest('[data-opt]'); if (b) setOption(b.dataset.opt, b.dataset.val); });
+renderOptions(); renderParts();
 
 // ---------- checks ----------
 function renderChecks() {
@@ -394,7 +460,7 @@ function footprint(id) {
 function overlapping(id) {
   const a = footprint(id);
   for (const other of parts.keys()) {
-    if (other === id || parts.get(other).def.fixed || mounted(parts.get(other))) continue;
+    if (other === id || parts.get(other).def.fixed || mounted(parts.get(other)) || !isActive(parts.get(other))) continue;
     const b = footprint(other);
     if (a.min.x < b.max.x && a.max.x > b.min.x && a.min.z < b.max.z && a.max.z > b.min.z) return other;
   }
@@ -561,7 +627,13 @@ function visuals(o, dt, time) {
     const on = o.leds[i], k = o.ledDim[i] ? 0.35 : 1;
     m.emissiveIntensity = on ? 1.1 * k : 0; m.opacity = on ? 0.95 : 0.6; h.material.opacity = on ? 0.85 * k : 0;
   });
-  if (lp.dirty !== o.leds.join()) renderLedPanel(o.leds);
+  R('rgb').rgb.forEach(({ m, h }, i) => {
+    const c = o.rgb[i], mx = Math.max(...c);
+    if (mx < 0.03) { m.emissive.set('#000000'); m.color.set('#e8eef2'); h.material.opacity = 0; return; }
+    C.setRGB(c[0] / mx, c[1] / mx, c[2] / mx, THREE.SRGBColorSpace);
+    m.color.copy(C); m.emissive.copy(C); m.emissiveIntensity = 0.6 + 0.8 * mx; h.material.color.copy(C); h.material.opacity = 0.5 + 0.4 * mx;
+  });
+  if (lp.dirty !== indicators(o).map(x => x.name).join()) renderLedPanel(o);
   const ring = R('buzz').ring; ring.material.opacity = o.buzz ? 0.7 * (1 - (time * 3 % 1)) : 0; const s = 1 + (time * 3 % 1) * 1.2; ring.scale.set(s, s, s);
   if (buzzGain) buzzGain.gain.setTargetAtTime(o.buzz ? 0.05 : 0, audio.currentTime, 0.005);
   drawLcd(o);
@@ -590,14 +662,27 @@ function hud(o) {
 // ---------- LED indicator panel ----------
 // which LEDs in each row are lit, e.g. Tank level -> [Blue]
 const groupsLit = leds => LED_GROUPS.map(gr => ({ gr, lit: LED_SPEC.filter((l, i) => l.g === gr.key && leds[i]) }));
+// name the colour an RGB LED is showing (intensities 0..1)
+function rgbName([r, g, b]) {
+  if (Math.max(r, g, b) < 0.05) return null;
+  if (r >= 0.5 && b < 0.3) { const q = g / r; return q < 0.12 ? 'Red' : q < 0.5 ? 'Orange' : 'Yellow'; }
+  return b >= g ? 'Blue' : 'Green';
+}
+const rgbCss = c => { const mx = Math.max(...c) || 1; return `rgb(${c.map(v => Math.round(v / mx * 255)).join(',')})`; };
+// what each of the 5 indicators shows right now, for either LED build
+function indicators(o) {
+  if (options.leds === 'rgb') return LED_GROUPS.map((gr, i) => {
+    const c = o.rgb[i], n = rgbName(c), spec = n && LED_SPEC.find(l => l.g === gr.key && l.name === n);
+    return { gr, name: n, css: n ? rgbCss(c) : '', label: n ? (spec ? spec.label : 'not in spec') : gr.off };
+  });
+  return groupsLit(o.leds).map(({ gr, lit }) => ({ gr, name: lit.length ? lit.map(l => l.name).join('+') : null, css: lit.length ? lit[0].color : '', label: lit.length ? lit.map(l => l.label).join(' + ') : gr.off }));
+}
 const lp = { dirty: '' };
-function renderLedPanel(leds = new Array(17).fill(false)) {
-  lp.dirty = leds.join();
-  $('leds').innerHTML = groupsLit(leds).map(({ gr, lit }, i) => {
-    const col = lit.length ? lit[0].color : '';
-    const meaning = lit.length ? lit.map(l => `${l.name} · ${l.label}`).join(' + ') : `off · ${gr.off}`;
-    return `<li><i class="ld" style="${col ? `background:${col};box-shadow:0 0 10px ${col}` : ''}"></i><span>${gr.name}</span><span class="lm">${meaning}</span></li>`;
-  }).join('');
+function renderLedPanel(o) {
+  const ind = o ? indicators(o) : LED_GROUPS.map(gr => ({ gr, name: null, css: '', label: gr.off }));
+  lp.dirty = ind.map(x => x.name).join();
+  $('leds').innerHTML = ind.map(({ gr, name, css, label }) =>
+    `<li><i class="ld" style="${css ? `background:${css};box-shadow:0 0 10px ${css}` : ''}"></i><span>${gr.name}</span><span class="lm">${name ? `${name} · ${label}` : `off · ${label}`}</span></li>`).join('');
 }
 $('lpToggle').onclick = () => { const p = $('ledpanel'); p.classList.toggle('closed'); $('lpToggle').setAttribute('aria-expanded', !p.classList.contains('closed')); };
 // small screens: fold the LED panel and the controls so the 3D view stays visible (also when the window is resized)
@@ -614,7 +699,7 @@ renderLedPanel();
 const LOG = [];
 let lastLogVt = -1e9, lastSig = '';
 function maybeLog(o) {
-  const gl = groupsLit(o.leds), leds = gl.map(x => x.lit.map(l => l.name).join('+') || 'off'), pix = gl.map(x => x.lit.length ? x.lit[0].color : '');
+  const ind = indicators(o), leds = ind.map(x => x.name || 'off'), pix = ind.map(x => x.css);
   const sig = [world.phase, o.sprPump, o.refPump, o.buzz, world.flameVisible, ...leds].join();
   if (rt.vt - lastLogVt < 1000 && sig === lastSig) return;
   lastLogVt = rt.vt; lastSig = sig;
@@ -681,11 +766,12 @@ function liveHigh() {
 $('bGlow').onclick = e => { glowOn = !glowOn; e.currentTarget.setAttribute('aria-pressed', glowOn); e.currentTarget.textContent = glowOn ? 'Wire glow on' : 'Wire glow off'; };
 
 // ---------- main loop ----------
+let testDriving = false;
 let last = performance.now(), hudT = 0;
 const step = sec => { const o = hw.evaluate(); world.sprPump = o.sprPump; world.refPump = o.refPump; world.step(sec); if (rt.state === 'running') maybeLog(o); };
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
-  if (rt.state === 'running') rt.advance(dt * 1000 * speed, step); else step(dt * speed);
+  if (!testDriving) { if (rt.state === 'running') rt.advance(dt * 1000 * speed, step); else step(dt * speed); } // a self-test drives time itself
   const o = hw.evaluate(), t = now / 1000;
   lastO = o; o.ping = hw.lastPing && performance.now() - hw.lastPing < 120;
   stepLayout(dt);
@@ -717,7 +803,7 @@ function resetAll() {
     p.group.updateMatrixWorld(true);
   }
   wires.clear(); hw.wires = []; hw.rebuild(); // rebuild first, or the old connections would make every guide wire look "already done"
-  for (const st of GUIDE) for (const [a, b, c] of st.wires) if (hw.net.of.get(a) !== hw.net.of.get(b)) { addWire(a, b, c, true); hw.rebuild(); }
+  for (const st of G()) for (const [a, b, c] of st.wires) if (hw.net.of.get(a) !== hw.net.of.get(b)) { addWire(a, b, c, true); hw.rebuild(); }
   setLayout(layout, false); // re-applies the current layout (sensors in the house when assembled) and re-routes every wire
   changed();
   S.goto(layout === 'assembled' ? 'house' : 'bench');
@@ -732,4 +818,6 @@ window.__fg = {
   setLayout, finishLayout, resetAll, traceWire, traceNet, clearTrace, LOG, save,
   get layout() { return layout; }, get layoutBusy() { return !!layoutAnim; }, get encl() { return encl; },
   stepLayout: dt => stepLayout(dt), // lets tests finish the layout animation without waiting for frames
-  simulate: async ms => { for (let t = 0; t < ms; t += 50) { if (rt.state === 'running') await rt.advance(50, step); else step(0.05); } const o = hw.evaluate(); visuals(o, 0.05, performance.now() / 1000); S.dio.update(world, o, 0.05, performance.now() / 1000); wires.update(performance.now() / 1000, null); S.render(); return o; } };
+  set testDriving(v) { testDriving = v; },
+  setOption, get options() { return options; }, // a self-test sets this so the animation loop stops advancing time on its own
+  simulate: async ms => { testDriving = true; while (rt.busy) await new Promise(r => setTimeout(r, 0)); for (let t = 0; t < ms; t += 50) { if (rt.state === 'running') await rt.advance(50, step); else step(0.05); } const o = hw.evaluate(); visuals(o, 0.05, performance.now() / 1000); S.dio.update(world, o, 0.05, performance.now() / 1000); wires.update(performance.now() / 1000, null); S.render(); return o; } };
