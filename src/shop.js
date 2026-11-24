@@ -35,12 +35,23 @@ async function shrink(file, max = 1000) {
 // names in the older photo checklist → items here
 const OLD_MAP = {
   'ESP32 DevKit (yours)': 'esp32', 'DHT22 (AM2302)': 'dht22', 'MQ-2 gas/smoke module': 'mq2', 'IR flame sensor': 'flame', 'Relay module': 'relay', 'LCD': 'lcd', 'Buzzer': 'buzzer',
-  'Mini submersible pump': 'pumps', 'Silicone tubing': 'tube', 'Spray / mist nozzle': 'tube', 'USB power bank': 'charger', 'USB data cable': 'usb', '4×AA battery holder': 'aaaholder',
-  'AA rechargeable batteries (NiMH)': 'aaa', 'Diode': 'd4007', 'Resistor 10 kΩ': 'r_mq', 'Resistor 20 kΩ': 'r_mq', 'Resistor 330 Ω': 'r_led', 'Resistor 1 kΩ': 'r_echo',
+  'Mini submersible pump': 'pumps', 'Silicone tubing': 'tube', 'Spray / mist nozzle': 'tube', 'USB data cable': 'usb', 'Diode': 'd4007', 'Resistor 10 kΩ': 'r_mq', 'Resistor 20 kΩ': 'r_mq', 'Resistor 330 Ω': 'r_led', 'Resistor 1 kΩ': 'r_echo',
   'Electrolytic capacitor': 'c470u', 'Ceramic capacitor': 'c100n', 'Level shifter (optional)': 'lls', 'Male pin header (if needed)': 'headers', 'Jumper wires, male-to-male': 'jmm',
   'Jumper wires, male-to-female': 'jmf', 'Jumper wires, female-to-female': 'jff', 'Hookup wire, red and black': 'hookup', 'Breadboard': 'bb830', 'Small screwdriver': 'drivers',
   'Wire stripper / cutter': 'stripper', 'Electrical tape': 'etape', 'Double-sided foam tape or hot glue gun': 'zipties', 'Cable ties (optional)': 'zipties', 'Tank container': 'tank',
   'Source container': 'source', 'Base and “house”': 'house', 'Multimeter (recommended)': 'dmm', 'Soldering iron kit (optional)': 'iron',
+};
+// items from the older checklist that this build replaces: their photos are kept as "Other photos" with a pointer to the right part
+const OLD_REPLACED = {
+  'USB power bank': 'Not used in this build. Buy a 5 V 2 A USB phone charger for the ESP32 instead.',
+  '4×AA battery holder': 'Not used in this build. Buy a 4×AAA battery holder with switch (6 V) for the pumps instead.',
+  'AA rechargeable batteries (NiMH)': 'Not used in this build. Buy AAA alkaline batteries (4 + 4 spare) instead: 4×1.5 V = 6 V for the pumps.',
+  'AA battery charger (if needed)': 'Not needed: this build uses AAA alkaline batteries, which are not recharged.',
+  'Water level sensor': 'Not used in this build. The tank level comes from the HC-SR04 ultrasonic sensor (or the DIY wire probes option).',
+  'LED stick': 'Not used in this build. It uses 17 single 5 mm LEDs with 74HC595 chips (or 5 RGB LEDs with the RGB option).',
+  'Transistor': 'Not needed: the relay module has its own transistor and opto-isolator, and the ESP32 drives the LEDs through the 74HC595 chips.',
+  'Spray / mist nozzle': 'Optional: fits on the end of the sprinkler tube (listed with the silicone tubing).',
+  'Resistor 20 kΩ': 'Goes with the 10 kΩ: the pair is the MQ-2 divider (listed as “10 kΩ + 20 kΩ resistor”).',
 };
 
 export function createShop({ getOptions, optionLabel, partCards, onFindPart, download }) {
@@ -161,7 +172,13 @@ export function createShop({ getOptions, optionLabel, partCards, onFindPart, dow
         if (id && photos[id] && !OLD_MAP[name + '#2']) { // slot already has a photo: keep both, extra one goes to "Other"
           if (photos[id] === src) continue; id = null;
         }
-        if (!id) { id = 'x_' + idx; if (!extra.some(x => x.id === id)) extra.push({ id, extra: true, qty: '—', name, why: 'Imported from your older photo checklist.' }); extras++; }
+        if (OLD_REPLACED[name]) { // an earlier version put these on the AAA / charger cards: take them back off
+          for (const k of ['charger', 'aaaholder', 'aaa']) if (photos[k] === src) { delete photos[k]; await photoPut(k, null); delete got[k]; if (notes[k] === saved.n?.[idx]) delete notes[k]; }
+        }
+        if (!id) {
+          id = 'x_' + idx; const why = OLD_REPLACED[name] || 'Imported from your older photo checklist.';
+          const old = extra.find(x => x.id === id); if (old) old.why = why; else extra.push({ id, extra: true, qty: '—', name, why }); extras++;
+        }
         else matched++;
         photos[id] = src; await photoPut(id, src);
         if (saved.g && saved.g[idx]) got[id] = true;
