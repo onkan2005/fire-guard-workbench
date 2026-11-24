@@ -430,7 +430,7 @@ void loop() { delay(1000); }
       const prevPage = document.body.classList.contains('page-shop') ? 'shop' : 'bench';
       fg.showPage('shop');
       ok('Shopping page replaces the 3D bench', !$('shopPage').hidden && getComputedStyle(document.querySelector('main.app')).display === 'none');
-      const cards = () => document.querySelectorAll('#shopPage .sc:not([data-item^="x_"])');
+      const cards = () => document.querySelectorAll('#shopPage .sc');
       const names = () => [...cards()].map(c => c.querySelector('.n').textContent);
       ok('Checklist lists every item for the build', cards().length === bomFor(fg.options).length, cards().length);
       ok('Every item has a photo drop zone', [...cards()].every(c => c.querySelector('[data-ph]')));

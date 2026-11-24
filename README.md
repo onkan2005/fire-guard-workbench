@@ -55,7 +55,7 @@ The **Shopping & photos** page (top bar) has a tickable shopping checklist for t
 capacitors, diodes, wires, consumables, tools) with PHP estimates, plus **Real build: safety & gotchas** and
 **Which chips can I use?** notes. Each item takes a reference photo: drop a picture on its card, click to pick one,
 or hover and paste (Ctrl+V). Click a photo to zoom. Photos stay in this browser (IndexedDB); **Save with photos**
-exports one HTML file, and **Import old checklist** pulls in the photos from the older *Components photo checklist* file.
+exports one HTML file with every photo, tick and note.
 Print and CSV export are there too.
 
 The side panels hide with the **‹ ›** buttons on the edges of the 3D view (or the **[** and **]** keys).

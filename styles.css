@@ -183,7 +183,7 @@ table.pins{border-collapse:collapse;width:100%;font-size:11.5px}table.pins td{pa
 .sc .f{display:flex;gap:8px;align-items:center;margin-top:4px}.sc .f label{display:flex;gap:5px;align-items:center;white-space:nowrap;font-size:13px}
 .sc .f input[type=checkbox]{width:17px;height:17px}
 .sc .f input[type=text]{flex:1;min-width:0;padding:4px 7px;border:1px solid var(--ln);border-radius:6px;background:var(--bg);font-size:12.5px}
-.filebtn{display:inline-flex;align-items:center;background:var(--pn2);border:1px solid var(--ln);border-radius:7px;cursor:pointer}
+
 .shoppage .notes{background:var(--pn2);border:1px solid var(--ln);border-radius:9px;padding:6px 12px;font-size:13px}.shoppage .notes p{margin:7px 0}.shoppage .notes b{color:#ffd36b}
 .pcards{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
 .viewer{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column}.viewer[hidden]{display:none}
