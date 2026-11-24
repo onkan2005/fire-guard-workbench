@@ -1,5 +1,7 @@
 # Fire Guard Workbench
 
+**Live demo: https://fire-guard-workbench.vercel.app**
+
 A 3D build-and-code simulator for the ESP32 Fire Guard project (fire detection, auto-sprinkler and tank refill).
 You wire the real parts together on a 3D bench, write the real Arduino C++ sketch, press **Upload & run**,
 and watch the house, tank and pumps react.

@@ -116,7 +116,10 @@ function buildEnclosure() {
   const g = new THREE.Group();
   const wallMat = new THREE.MeshStandardMaterial({ color: '#cfd6dd', transparent: true, opacity: 0.25, roughness: 0.25, depthWrite: false, side: THREE.DoubleSide });
   const rimMat = new THREE.MeshStandardMaterial({ color: '#7f8b96', roughness: 0.5 });
-  const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), new THREE.MeshStandardMaterial({ color: '#262c32', roughness: 0.85 })); floor.position.set(cx, -0.45, cz); floor.receiveShadow = true; g.add(floor);
+  // floor sits clearly above the mat (top at y = 0.8) and is nudged towards the camera in depth,
+  // otherwise the two nearly-coplanar surfaces flicker through each other (z-fighting)
+  const floorMat = new THREE.MeshStandardMaterial({ color: '#262c32', roughness: 0.85, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const floor = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), floorMat); floor.position.set(cx, 0.3, cz); floor.receiveShadow = true; g.add(floor);
   for (const [ww, dd, x, z] of [[w, 3, cx, minZ], [w, 3, cx, maxZ], [3, d, minX, cz], [3, d, maxX, cz]]) {
     const wall = new THREE.Mesh(new THREE.BoxGeometry(ww, h, dd), wallMat); wall.position.set(x, h / 2, z); wall.renderOrder = 2; g.add(wall);
     const rim = new THREE.Mesh(new THREE.BoxGeometry(ww + 0.6, 1.8, dd + 0.6), rimMat); rim.position.set(x, h, z); rim.castShadow = true; g.add(rim);

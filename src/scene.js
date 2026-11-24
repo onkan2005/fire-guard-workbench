@@ -28,7 +28,7 @@ export function createScene(host) {
   const pm = new THREE.PMREMGenerator(renderer);
   scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
 
-  const camera = new THREE.PerspectiveCamera(38, 1, 5, 6000);
+  const camera = new THREE.PerspectiveCamera(38, 1, 10, 4000); // tighter near/far = more depth precision, less flicker
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = 1.48; controls.minDistance = 30; controls.maxDistance = 1800;
   controls.screenSpacePanning = true;
@@ -52,7 +52,7 @@ export function createScene(host) {
     txt(g, 'FIRE GUARD WORKBENCH', -200, 128, 7, 'rgba(255,255,255,.35)', 'left', 800);
   }, 3);
   const matMesh = new THREE.Mesh(new THREE.PlaneGeometry(560, 280), new THREE.MeshStandardMaterial({ map: matTex, roughness: 0.9 }));
-  matMesh.rotation.x = -Math.PI / 2; matMesh.position.set(20, 0.05, 10); matMesh.receiveShadow = true; scene.add(matMesh);
+  matMesh.rotation.x = -Math.PI / 2; matMesh.position.set(20, 0.2, 10); matMesh.receiveShadow = true; scene.add(matMesh);
 
   const dio = buildDiorama(scene);
 
