@@ -31,6 +31,8 @@ export function createScene(host) {
   const camera = new THREE.PerspectiveCamera(38, 1, 10, 4000); // tighter near/far = more depth precision, less flicker
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = 1.48; controls.minDistance = 30; controls.maxDistance = 1800;
+  controls.zoomToCursor = true; // scroll zooms towards whatever is under the mouse, so you rarely need to pan far
+  controls.panSpeed = 1.2;
   controls.screenSpacePanning = true;
 
   scene.add(new THREE.HemisphereLight('#dfe9f5', '#3a3026', 0.35));
@@ -63,6 +65,10 @@ export function createScene(host) {
   new ResizeObserver(resize).observe(host); resize();
 
   let fly = null;
+  // the moment you grab the camera (any button) or scroll, any fly-to animation stops
+  controls.addEventListener('start', () => { fly = null; });
+  renderer.domElement.addEventListener('pointerdown', () => { fly = null; }, { capture: true });
+  renderer.domElement.addEventListener('wheel', () => { fly = null; }, { capture: true, passive: true });
   function goto(name) {
     const v = VIEWS[name]; if (!v) return;
     fly = { t: 0, p0: camera.position.clone(), t0: controls.target.clone(), p1: new THREE.Vector3(...v.pos), t1: new THREE.Vector3(...v.target) };

@@ -487,7 +487,7 @@ canvas.addEventListener('pointerdown', e => {
   if (down.part && !down.pin && !pending && !down.wire && mounted(parts.get(down.part))) down.mountedPart = true;
   if (down.part && !down.pin && !pending && !(down.wire) && !parts.get(down.part).def.fixed && !mounted(parts.get(down.part)) && !layoutAnim) {
     const p = parts.get(down.part), pt = plane(0);
-    if (pt) { drag = { p, off: p.group.position.clone().sub(pt), start: p.group.position.clone(), started: false }; S.controls.enabled = false; }
+    if (pt) { drag = { p, off: p.group.position.clone().sub(pt), start: p.group.position.clone(), started: false }; S.controls.enabled = false; try { canvas.setPointerCapture(e.pointerId); } catch { } }
   }
 }, { capture: true });
 
@@ -504,6 +504,8 @@ canvas.addEventListener('pointermove', e => {
       tip.style.display = 'none'; return;
     }
   }
+  // while you orbit/pan (a mouse button held), skip hover picking entirely: keeps camera moves smooth
+  if (e.buttons && !pending) { tip.style.display = 'none'; hoverPin = null; wires.hover = null; return; }
   const hp = pickPin();
   hoverPin = hp ? hp.object.userData.pin : null;
   wires.hover = null;
@@ -551,6 +553,9 @@ canvas.addEventListener('pointerup', e => {
   selPart = null; selWire(null); selbar.style.display = 'none'; clearTrace();
 });
 canvas.addEventListener('pointerleave', () => { tip.style.display = 'none'; wires.hover = null; });
+// safety net: if a board drag ends anywhere outside the 3D view, give the camera controls back
+addEventListener('pointerup', e => { if (e.target !== canvas && !S.controls.enabled) { S.controls.enabled = true; if (drag && drag.started) { drag.p.bench.x = drag.p.group.position.x; drag.p.bench.z = drag.p.group.position.z; finishLayout(); save(); } drag = null; down = null; } });
+addEventListener('blur', () => { S.controls.enabled = true; drag = null; down = null; });
 // right-click (without dragging) on a pin or wire traces it; right-drag still pans
 let rdown = null;
 canvas.addEventListener('pointerdown', e => { if (e.button === 2) rdown = { x: e.clientX, y: e.clientY }; });
