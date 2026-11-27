@@ -362,7 +362,7 @@ export const PARTS = [
   },
   // ---------- option: 5 RGB LEDs on a PCA9685 16-channel PWM board ----------
   {
-    id: 'pca', name: 'PCA9685 16-channel PWM board (LED driver)', short: 'PCA9685', pos: [30, 118, 0], option: ['leds', 'rgb'],
+    id: 'pca', name: 'PCA9685 16-channel PWM board (LED driver)', short: 'PCA9685', pos: [30, 118, 0], option: [['leds', 'rgb'], ['board', 'breakout']],
     buy: [1, 'PCA9685 16-channel 12-bit PWM board (I2C, 0x40)', 'Drives the 5 RGB LEDs (15 channels) with real PWM, so orange and yellow are possible. Uses the LCD’s I2C wires, no extra ESP32 pins. Most boards already have a 220 Ω resistor on every output.', 180, 300],
     info: 'An I2C PWM chip: the ESP32 sends “channel n, brightness x” over SDA/SCL (address 0x40) and the board keeps all 16 outputs pulsing at 1 kHz by itself. Each output already has a 220 Ω series resistor. The I2C/power pins on the left are passed through to the right side for chaining.',
     pins: [...['GND', 'OE', 'SCL', 'SDA', 'VCC', 'VP'].map((id, i) => P(id, id === 'VP' ? 'V+' : id, -28.5, -6.35 + i * 2.54, { role: { GND: 'gnd', VCC: 'vcc', SDA: 'i2c', SCL: 'i2c' }[id] || 'in-digital' })),
@@ -380,6 +380,43 @@ export const PARTS = [
       decal(g, 9, 9, c => { txt(c, 'PCA9685', 0, 0, 1.5, '#d8d8d8', 'center', 700); }, 0, TOP + 1.62, -2);
       for (let n = 0; n < 16; n++) box(g, 2.5, 2.5, 5, BLACK(), -19.05 + n * 2.54, TOP, 6.2); // V+/GND rows behind each PWM pin
       for (let i = 0; i < 16; i++) smd(g, -19.05 + i * 2.54, 2.6, '#222', 1.6, 0.9); // the 220 Ω resistors
+    },
+  },
+  // ---------- option: the same PCA9685 on an Arduino-Uno-size servo shield ----------
+  {
+    // 68.6 × 53.3 mm Uno shield. It can't plug onto an ESP32, so SDA/SCL/5V/GND are jumpered from its header sockets.
+    id: 'pcas', name: 'PCA9685 16-channel PWM servo shield (Uno size, LED driver)', short: 'Servo shield', pos: [30, 118, 0], option: [['leds', 'rgb'], ['board', 'shield']],
+    buy: [1, '16-channel 12-bit PWM servo shield, PCA9685 (Uno size)', 'Same chip and code as the PCA9685 breakout, in Arduino Uno shield form. Wire SDA, SCL, 5V and GND to the ESP32 with jumpers.', 450, 500],
+    info: 'Same PCA9685 chip as the breakout (I2C address 0x40, same Adafruit_PWMServoDriver code), on an Arduino Uno shield. It does not plug onto an ESP32: SDA, SCL (top header, next to AREF), 5V and GND (power header) are jumpered to the ESP32 and rails. VCC-select jumper on 5V so the green and blue LEDs are bright. Each channel is a 3-pin servo header (PWM / V+ / GND): only the PWM signal pin is used for an LED, and it already has a 220 Ω resistor. The green V+ screw terminal is servo power: leave it empty.',
+    pins: [P('SCL', 'SCL', -24, -24.1, { role: 'i2c' }), P('SDA', 'SDA', -21.46, -24.1, { role: 'i2c' }),
+      P('VCC', '5V', -9.38, 24.1, { role: 'vcc' }), P('GND', 'GND', -6.84, 24.1, { role: 'gnd' }),
+      P('VP', 'V+', -28.5, 4, { kind: 'screw', role: 'in-digital' }),
+      ...Array.from({ length: 16 }, (_, n) => P('PWM' + n, String(n), -14 + Math.floor(n / 4) * 11 + (n % 4) * 2.54, 2, { role: 'out-pwm' }))],
+    build(p) {
+      const g = p.inner, sx = n => -14 + Math.floor(n / 4) * 11 + (n % 4) * 2.54;
+      pcb(g, 68.6, 53.3, '#1f6fb8', c => {
+        // proto area
+        c.fillStyle = '#c9a15a'; for (let x = -26; x <= 16; x += 2.54) for (let z = -19; z <= -6; z += 2.54) { c.beginPath(); c.arc(x, z, 0.5, 0, 7); c.fill(); }
+        txt(c, '16 × 12-BIT PWM / SERVO SHIELD', 0, -12.6, 1.5, '#ffffff', 'center', 800);
+        txt(c, 'SCL', -24, -21.2, 1.1, '#fff'); txt(c, 'SDA', -21.46, -21.2, 1.1, '#fff');
+        txt(c, '5V', -9.38, 21.2, 1.1, '#fff'); txt(c, 'GND', -6.84, 21.2, 1.1, '#fff');
+        for (let n = 0; n < 16; n++) txt(c, String(n), sx(n), -0.4, 1, '#fff');
+        txt(c, 'PWM', 30.5, 2, 1, '#fff', 'left'); txt(c, 'V+', 30.5, 4.54, 1, '#fff', 'left'); txt(c, 'GND', 30.5, 7.08, 1, '#fff', 'left');
+        txt(c, 'V+  servo power (not used for LEDs)', -31.5, 10.5, 0.95, '#ffe08a', 'left');
+        txt(c, 'VCC select: 5V', -21, 15.6, 1, '#fff', 'left');
+        txt(c, 'I2C 0x40', 24, -2, 1.1, '#fff');
+      });
+      // Uno header sockets (decor) along both long edges; the four used pins are real header pins
+      for (const [x0, n, z] of [[-26.5, 10, -24.1], [3, 8, -24.1], [-19.5, 8, 24.1], [6, 6, 24.1]]) box(g, n * 2.54, 8.5, 2.5, BLACK(), x0 + (n - 1) * 1.27, TOP - 0.5, z);
+      // servo headers: V+ and GND rows behind each PWM pin (the PWM pin itself is drawn as the wire pin)
+      for (let n = 0; n < 16; n++) for (const dz of [2.54, 5.08]) { box(g, 2.5, 2.5, 2.5, BLACK(), sx(n), TOP, 2 + dz); box(g, 0.64, 6, 0.64, GOLD(), sx(n), TOP + 2.5, 2 + dz); }
+      for (let n = 0; n < 16; n++) smd(g, sx(n), -3.2, '#222', 1.6, 0.9); // 220 Ω output resistors
+      box(g, 10, 1.6, 10, BLACK(), 24, TOP, -10); decal(g, 9, 9, c => txt(c, 'PCA9685', 0, 0, 1.5, '#d8d8d8', 'center', 700), 24, TOP + 1.62, -10);
+      screwBlock(g, -28.5, 6.5, 2, 5, '#3aa655');                      // V+ / GND servo power terminal
+      for (const dx of [0, 2.54, 5.08]) box(g, 0.64, 6, 0.64, GOLD(), -20 + dx, TOP + 2.5, 18.5); // VCC-select header
+      box(g, 5.6, 5, 2.6, mat('#2f7de1'), -18.73, TOP + 2, 18.5);       // jumper cap on 5V side
+      box(g, 6, 3.5, 6, mat('#222'), -28, TOP, 19); cyl(g, 1.6, 1.2, mat('#333'), -28, TOP + 3.5, 19, 16); // reset button
+      p.refs.dled = led(g, 14, 18, '#30ff60');
     },
   },
   {

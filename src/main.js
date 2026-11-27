@@ -6,7 +6,7 @@ import { createInspector, groupForPin } from './inspect.js';
 import { Hardware } from './hardware.js';
 import { World, TANK_LITRES } from './world.js';
 import { Runtime } from './runtime.js';
-import { GUIDE, autoColor, OPTIONS, DEFAULT_OPTIONS, inBuild, guideFor } from './guide.js';
+import { GUIDE, autoColor, OPTIONS, DEFAULT_OPTIONS, inBuild, guideFor, optionKeys } from './guide.js';
 import { createEditor } from './editor.js';
 import { DEFAULT_SKETCH, buildSketch, previousSketch } from './firmware.js';
 import { createShop } from './shop.js';
@@ -302,7 +302,7 @@ $('wireAll').onclick = () => { for (const st of G()) for (const [a, b, c] of st.
 $('clearWires').onclick = () => { if (!hw.wires.length || confirm('Remove all ' + hw.wires.length + ' wires?')) { wires.clear(); hw.wires = []; selWire(null); changed(); } };
 
 // ---------- Shopping & photos page (its own top-level page) ----------
-const optionLabel = () => Object.entries(OPTIONS).map(([k, o]) => o.choices[options[k]]).join(' · ');
+const optionLabel = () => Object.entries(OPTIONS).filter(([, o]) => inBuild(o.when, options)).map(([k, o]) => o.choices[options[k]]).join(' · ');
 const shop = createShop({
   getOptions: () => options, optionLabel, download,
   partCards: () => PARTS.filter(d => inBuild(d.option, options)).map(d => `<div class="pcard" data-part="${d.id}" tabindex="0"><h3>${esc(d.name)}</h3><p>${esc(d.info)}</p></div>`).join(''),
@@ -341,7 +341,7 @@ setTimeout(() => { try { if (localStorage.getItem('fireguard-page') === 'shop') 
 
 // ---------- build options UI ----------
 function renderOptions() {
-  $('opts').innerHTML = `<b>Build options</b>` + Object.entries(OPTIONS).map(([k, o]) => `<div class="optrow"><span class="mu">${esc(o.title)}</span><div class="seg" role="group" aria-label="${esc(o.title)}">${Object.entries(o.choices).map(([v, label]) => `<button class="sm ${options[k] === v ? 'on' : ''}" data-opt="${k}" data-val="${v}" aria-pressed="${options[k] === v}">${esc(label)}</button>`).join('')}</div></div>`).join('');
+  $('opts').innerHTML = `<b>Build options</b>` + Object.entries(OPTIONS).filter(([, o]) => inBuild(o.when, options)).map(([k, o]) => `<div class="optrow"><span class="mu">${esc(o.title)}</span><div class="seg" role="group" aria-label="${esc(o.title)}">${Object.entries(o.choices).map(([v, label]) => `<button class="sm ${options[k] === v ? 'on' : ''}" data-opt="${k}" data-val="${v}" aria-pressed="${options[k] === v}">${esc(label)}</button>`).join('')}</div></div>`).join('');
 }
 function setOption(key, val) {
   if (options[key] === val || layoutAnim) return;
@@ -351,9 +351,10 @@ function setOption(key, val) {
   let removed = 0;
   for (const w of [...hw.wires]) if (!pinInBuild(w.a) || !pinInBuild(w.b)) { hw.wires = hw.wires.filter(x => x !== w); wires.remove(w.id); removed++; }
   applyOptions(); hw.rebuild();
-  if (removed) for (const st of G()) if (st.option && st.option[0] === key) for (const [a, b, c] of st.wires) if (hw.net.of.get(a) !== hw.net.of.get(b)) { addWire(a, b, c, true); hw.rebuild(); }
+  if (removed) for (const st of G()) if (optionKeys(st.option).includes(key)) for (const [a, b, c] of st.wires) if (hw.net.of.get(a) !== hw.net.of.get(b)) { addWire(a, b, c, true); hw.rebuild(); }
   let note = '';
-  if (editor.value === oldSketch) { editor.value = buildSketch(options); note = ' The code was switched to match.'; }
+  if (buildSketch(options) === oldSketch) { /* same firmware (e.g. breakout ↔ shield): nothing to change */ }
+  else if (editor.value === oldSketch) { editor.value = buildSketch(options); note = ' The code was switched to match.'; }
   else if (confirm('Your code was edited. Replace it with the default firmware for the new build?\n\nOK = switch the code (recommended). Cancel = keep your code (it will need changes for the new parts).')) { editor.value = buildSketch(options); note = ' The code was switched to match.'; }
   setLayout(layout, false); changed(); renderOptions(); renderParts(); renderLedPanel();
   if (wasRunning) run(); else { rt.stop(); hw.resetMCU(); }
@@ -439,13 +440,25 @@ function traceWire(id) {
   if ($('trNet')) $('trNet').onclick = () => traceNet(w.a);
   $('trClose').onclick = () => { clearTrace(); selWire(null); };
 }
+// ---------- replace a part with an alternative (switches the matching build option) ----------
+// which build options a part belongs to, and which part to select after switching to each choice
+const SWAP_KEYS = { sr: ['leds'], panel: ['leds'], pca: ['board', 'leds'], pcas: ['board', 'leds'], rgb: ['leds'], us: ['level'], div2: ['level'], probe: ['level'], pull: ['level'] };
+const MAIN_PART = { leds: { single: () => 'sr', rgb: () => options.board === 'shield' ? 'pcas' : 'pca' }, board: { breakout: () => 'pca', shield: () => 'pcas' }, level: { ultrasonic: () => 'us', probes: () => 'probe' } };
+function replacements(id) {
+  return (SWAP_KEYS[id] || []).filter(k => inBuild(OPTIONS[k].when, options)).flatMap(k => Object.entries(OPTIONS[k].choices).filter(([v]) => v !== options[k]).map(([v, label]) => ({ key: k, val: v, label: (k === 'board' ? 'PCA9685 ' : '') + label })));
+}
 function selectPart(id, focus) {
   wires.select(null); selPart = id; const p = parts.get(id);
-  selbar.innerHTML = `<span><b>${esc(p.def.name)}</b></span><button class="sm primary" id="inspPart" title="Fly in close and see the internal connections (or double-click the part)">Inspect</button>${p.def.fixed ? '<span class="mu">fixed in place</span>' : mounted(p) ? `<span class="mu">${p.def.assembled ? 'mounted: ' + esc(p.def.assembled.where) : 'in the control box'}</span>` : '<button class="sm" id="rotPart">Rotate 90°</button>'}<button class="sm" id="infoPart">Info</button>`;
+  selbar.innerHTML = `<span><b>${esc(p.def.name)}</b></span><button class="sm primary" id="inspPart" title="Fly in close and see the internal connections (or double-click the part)">Inspect</button>${p.def.fixed ? '<span class="mu">fixed in place</span>' : mounted(p) ? `<span class="mu">${p.def.assembled ? 'mounted: ' + esc(p.def.assembled.where) : 'in the control box'}</span>` : '<button class="sm" id="rotPart">Rotate 90°</button>'}<button class="sm" id="infoPart">Info</button>${replacements(id).length ? `<span class="swapwrap"><button class="sm" id="swapPart" aria-haspopup="true" title="Swap this part for an alternative (changes the build option)">Replace ▾</button><div class="swapmenu" id="swapMenu" hidden>${replacements(id).map(r => `<button class="sm" data-swap="${r.key}:${r.val}">${esc(r.label)}</button>`).join('')}</div></span>` : ''}`;
   $('inspPart').onclick = () => { selbar.style.display = 'none'; insp.open(id); };
   selbar.style.display = 'flex';
   if ($('rotPart')) $('rotPart').onclick = () => rotatePart(id);
-  $('infoPart').onclick = () => { tab('left', 'parts'); const c = document.querySelector(`.pcard[data-part="${id}"]`); c && c.scrollIntoView({ block: 'center' }); c && c.focus(); };
+  $('infoPart').onclick = () => { showPage('shop'); const c = document.querySelector(`.pcard[data-part="${id}"]`); c && c.scrollIntoView({ block: 'center' }); c && c.focus(); };
+  const alts = replacements(id);
+  if (alts.length) {
+    $('swapPart').onclick = e => { e.stopPropagation(); const m = $('swapMenu'); m.hidden = !m.hidden; };
+    selbar.querySelectorAll('[data-swap]').forEach(b => b.onclick = () => { const [k, v] = b.dataset.swap.split(':'); $('swapMenu').hidden = true; setOption(k, v); const to = MAIN_PART[k][v](); if (parts.has(to) && isActive(parts.get(to))) selectPart(to, true); });
+  }
   if (focus) S.focus(p.group, id === 'lcd' || id === 'rail' ? 190 : 150);
 }
 // footprint on the bench (x/z only) of a part's own meshes, ignoring decorative leads
@@ -822,5 +835,5 @@ window.__fg = {
   get layout() { return layout; }, get layoutBusy() { return !!layoutAnim; }, get encl() { return encl; },
   stepLayout: dt => stepLayout(dt), // lets tests finish the layout animation without waiting for frames
   set testDriving(v) { testDriving = v; },
-  setOption, get options() { return options; }, shop, showPage, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
+  setOption, get options() { return options; }, shop, showPage, selectPart, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
   simulate: async ms => { testDriving = true; while (rt.busy) await new Promise(r => setTimeout(r, 0)); for (let t = 0; t < ms; t += 50) { if (rt.state === 'running') await rt.advance(50, step); else step(0.05); } const o = hw.evaluate(); visuals(o, 0.05, performance.now() / 1000); S.dio.update(world, o, 0.05, performance.now() / 1000); wires.update(performance.now() / 1000, null); S.render(); return o; } };

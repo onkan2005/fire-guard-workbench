@@ -168,7 +168,8 @@ function makeApi(rt) {
     constructor(addr = 0x40) { this.addr = addr; this.freq = 200; }
     _link() {
       const { sda, scl } = mcu.i2c;
-      const ok = this.addr === 0x40 && hw.gpioOn('pca.SDA') === sda && hw.gpioOn('pca.SCL') === scl && hw.vcc('pca') >= 2.3;
+      const id = hw.active && hw.active.has('pcas') ? 'pcas' : 'pca'; // breakout or servo shield: same chip
+      const ok = this.addr === 0x40 && hw.gpioOn(id + '.SDA') === sda && hw.gpioOn(id + '.SCL') === scl && hw.vcc(id) >= 2.3;
       if (!ok) warnOnce('pca', `[sim] I2C: no PCA9685 answered at 0x${this.addr.toString(16).toUpperCase()} on SDA=GPIO${sda}, SCL=GPIO${scl}.` + (this.addr !== 0x40 ? ' This board is at 0x40.' : ' Check its SDA/SCL wires and power.'));
       return ok;
     }

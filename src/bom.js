@@ -32,7 +32,8 @@ const ITEMS = [
   I('hc595', 'outputs', 3, '74HC595 shift register, DIP-16 (74HCT595 if you can find it)', 'Three chained = 24 outputs from 3 ESP32 pins for the 17 LEDs.', 15, 30, { opt: ['leds', 'single'] }),
   I('socket', 'outputs', 3, '16-pin DIP IC socket', 'Solder the socket, not the chip: easy to replace a dead 74HC595.', 5, 10, { opt: ['leds', 'single'], optional: true }),
   I('leds', 'outputs', 17, '5 mm LEDs: 5 green, 4 blue, 4 red, 3 orange, 1 yellow', 'One LED per workshop state. Buy a few extra of each colour.', 2, 4, { opt: ['leds', 'single'] }),
-  I('pca9685', 'outputs', 1, 'PCA9685 16-channel PWM board (I2C)', 'Drives the 5 RGB LEDs with real PWM (orange and yellow). Check it has 220 Ω resistors on the outputs.', 180, 300, { opt: ['leds', 'rgb'] }),
+  I('pca9685', 'outputs', 1, 'PCA9685 16-channel PWM board (I2C)', 'Drives the 5 RGB LEDs with real PWM (orange and yellow). Check it has 220 Ω resistors on the outputs.', 180, 300, { opt: [['leds', 'rgb'], ['board', 'breakout']] }),
+  I('pcashield', 'outputs', 1, '16-channel 12-bit PWM servo shield, PCA9685 (Uno size)', 'Same PCA9685 chip and code as the breakout. It is an Arduino Uno shield, so connect SDA, SCL, 5V and GND to the ESP32 with male-to-female jumpers. VCC-select jumper on 5V. The proto area fits the LED wiring.', 450, 500, { opt: [['leds', 'rgb'], ['board', 'shield']] }),
   I('rgbled', 'outputs', 6, 'RGB LED 5 mm, common CATHODE (4 legs), 5 + 1 spare', 'One per indicator. Common anode will NOT work with this wiring.', 8, 15, { opt: ['leds', 'rgb'] }),
 
   I('r_mq', 'passives', 1, '10 kΩ + 20 kΩ resistor (one of each)', 'MQ-2 divider: keeps GPIO34 under 3.3 V.', 2, 5),
@@ -77,7 +78,8 @@ const ITEMS = [
   I('drivers', 'tools', 1, 'Small screwdriver set', 'Screw terminals and the relay.', 50, 150, { optional: true }),
 ];
 
-export const bomFor = options => ITEMS.filter(it => !it.opt || options[it.opt[0]] === it.opt[1]);
+const pairs = opt => !opt ? [] : Array.isArray(opt[0]) ? opt : [opt];
+export const bomFor = options => ITEMS.filter(it => pairs(it.opt).every(([k, v]) => options[k] === v));
 
 export const SAFETY = [
   ['Will it blow up?', 'No. Wired like the guide, no part is pushed past its maximum ratings: 5 V never reaches an ESP32 pin (dividers on the MQ-2 and HC-SR04, DHT22 and flame sensor on 3.3 V), the pumps never draw from the ESP32, and every LED has a resistor. The real risks are the four gotchas below and water.'],

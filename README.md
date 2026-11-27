@@ -47,7 +47,10 @@ Pick them at the top of the **Build guide** tab; the 3D parts, wiring guide, fir
 | Option | Choice A (default) | Choice B |
 |---|---|---|
 | LED indicators | 17 single 5 mm LEDs on three chained **74HC595** shift registers (DATA 23, CLOCK 18, LATCH 13), 330 Ω each | 5 common-cathode **RGB LEDs** on a **PCA9685** 16-channel PWM board sharing the LCD's I2C bus (real orange/yellow by mixing) |
+| PCA9685 board (RGB only) | Small **breakout** board | Uno-size **servo shield** (same chip and code), jumpered to the ESP32: SDA 21, SCL 22, 5V, GND |
 | Tank level | **HC-SR04** ultrasonic above the tank (TRIG 25, ECHO 35 through a 1k/2k divider) | **DIY wire probes**: bare copper wires at 10/33/66/95 % (GPIO 32/33/26/14 through 470 kΩ pull-ups), common wire on GPIO25 driven LOW only while reading |
+
+Or click a part in 3D and use **Replace ▾** in its toolbar to swap it for an alternative (74HC595 ↔ PCA9685, breakout ↔ servo shield, HC-SR04 ↔ wire probes).
 
 ## Shopping checklist & safety
 

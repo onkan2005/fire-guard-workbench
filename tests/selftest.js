@@ -415,6 +415,28 @@ void loop() { delay(1000); }
       ok('RGB fire: sprinkler green, fume red, fire class lit', /^Green/.test(ind()[0]) && /^Red/.test(ind()[4]) && !/^off/.test(ind()[3]), ind());
       const seen = new Set(); fg.world.extinguish(); fg.world.temp = 80; for (let i = 0; i < 40; i++) { await sim(500); seen.add(ind()[3].split(' ')[0]); }
       ok('RGB: fire class shows orange/yellow as real mixed colours while cooling', seen.has('Orange') || seen.has('Yellow'), [...seen]);
+      // the same chip on an Uno-size servo shield, chosen from the part's Replace menu
+      fg.world.reset(); fg.rt.stop();
+      const codeBefore = fg.editor.value;
+      ok('PCA9685 board option shows only with RGB LEDs', !!document.querySelector('[data-opt="board"]'));
+      fg.selectPart('pca');
+      const swap = document.querySelector('#selbar [data-swap="board:shield"]');
+      ok('Selected PCA9685 offers “Replace” with the servo shield', !!swap && !!document.querySelector('#selbar [data-swap="leds:single"]'));
+      swap.click();
+      ok('Shield: servo shield shown, breakout hidden, RGB panel kept', visible().includes('pcas') && !visible().includes('pca') && visible().includes('rgb'), visible());
+      ok('Shield: its wiring was added and the guide is complete', $('progTxt').textContent === `${total()} / ${total()} connections`, $('progTxt').textContent);
+      ok('Shield: no wiring errors or warnings', !issues().some(i => i.level !== 'info'), issues().filter(i => i.level !== 'info').map(i => i.msg));
+      ok('Shield: same firmware, code untouched', fg.editor.value === codeBefore);
+      ok('Shield: the shield is the selected part after replacing', /servo shield/i.test($('selbar').textContent));
+      ok('Shield: it does not overlap other boards', !fg.overlapping('pcas'), fg.overlapping('pcas'));
+      r = await runCode(fg.editor.value, 3000);
+      ok('Shield: compiles and runs with no [sim] warnings', r.state === 'running' && !/\[sim\]/.test(r.serial), (r.serial.match(/\[sim\][^\n]*/g) || []).join(' | '));
+      ok('Shield idle: sprinkler blue, fume green', /^Blue/.test(ind()[0]) && /^Green/.test(ind()[4]), ind());
+      fg.world.intensity = 80; fg.world.ignite(); await sim(8000);
+      ok('Shield fire: sprinkler green, fume red, fire class lit', /^Green/.test(ind()[0]) && /^Red/.test(ind()[4]) && !/^off/.test(ind()[3]), ind());
+      ok('Shield: shopping list has the shield, not the breakout', bomFor(fg.options).some(i => i.id === 'pcashield') && !bomFor(fg.options).some(i => i.id === 'pca9685'));
+      fg.world.reset(); fg.setOption('board', 'breakout');
+      ok('Back to the breakout board', visible().includes('pca') && !visible().includes('pcas') && $('progTxt').textContent === `${total()} / ${total()} connections`);
       // DIY probes
       fg.world.reset(); fg.setOption('level', 'probes');
       ok('Probes: probe stick + pull-up board shown, HC-SR04 hidden', visible().includes('probe') && visible().includes('pull') && !visible().includes('us') && !visible().includes('div2'), visible());
@@ -435,7 +457,7 @@ void loop() { delay(1000); }
       });
       // back to the default build
       fg.setOption('leds', 'single'); fg.setOption('level', 'ultrasonic');
-      ok('Back to default: 74HC595 + HC-SR04 build restored', visible().includes('sr') && visible().includes('us') && !visible().includes('pca') && !visible().includes('probe'));
+      ok('Back to default: 74HC595 + HC-SR04 build restored', visible().includes('sr') && visible().includes('us') && !visible().includes('pca') && !visible().includes('pcas') && !visible().includes('probe'));
       ok('Back to default: guide complete again', $('progTxt').textContent === `${total()} / ${total()} connections`, $('progTxt').textContent);
       ok('Back to default: code is the 74HC595 + HC-SR04 firmware', /shiftOut/.test(fg.editor.value) && /pulseIn/.test(fg.editor.value));
     }

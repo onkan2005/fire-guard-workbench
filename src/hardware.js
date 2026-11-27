@@ -201,6 +201,11 @@ for (let n = 0; n < 16; n++) DRIVERS['pca.PWM' + n] = (hw, seen, env, worst) => 
   if (hw.connected('pca.OE') && (hw.netV('pca.OE', seen) ?? 0) > 1.5) return 0;
   return v * hw.pca[n];
 };
+// the Uno-size servo shield: same chip, same channel duties (no OE pin broken out)
+for (let n = 0; n < 16; n++) DRIVERS['pcas.PWM' + n] = (hw, seen, env, worst) => {
+  const v = hw.vcc('pcas', seen, worst); if (!v) return null;
+  return worst ? v : v * hw.pca[n];
+};
 // DIY probes: a wire under water is connected (through the water) to the common wire; if that is LOW, so is the probe
 const PROBE_H = [0.10, 0.33, 0.66, 0.95];
 for (let k = 1; k <= 4; k++) DRIVERS['probe.P' + k] = (hw, seen, env, worst) => {

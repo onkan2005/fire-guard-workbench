@@ -3,6 +3,12 @@
 // Steps with `option` only apply to that build option (see OPTIONS / guideFor()).
 const LED_COLORS = ['#2fbf5b', '#2f7de1', '#e5392f', '#2f7de1', '#2fbf5b', '#e5392f', '#ff7f1e', '#2f7de1', '#2fbf5b', '#2fbf5b', '#2f7de1', '#f2c230', '#ff7f1e', '#e5392f', '#2fbf5b', '#ff7f1e', '#e5392f'];
 
+// RGB panel wiring from a PCA9685 (breakout `pca` or servo shield `pcas`): channel 3n → red leg of LED n, 3n+1 → green, 3n+2 → blue
+function rgbPanelStep(drv, board, note) {
+  return { title: 'RGB LED panel (5 LEDs)', part: 'rgb', option: [['leds', 'rgb'], ['board', board]], why: `Channel 3n → red leg of LED n, 3n+1 → green, 3n+2 → blue (${note}). The shared cathode goes to GND.`,
+    wires: [...Array.from({ length: 15 }, (_, n) => [drv + '.PWM' + n, 'rgb.' + 'RGB'[n % 3] + Math.floor(n / 3), ['#e5392f', '#2fbf5b', '#2f7de1'][n % 3]]), ['rgb.GND', 'rail.GND_11', '#222428']] };
+}
+
 export const GUIDE = [
   { title: 'Power rails', part: 'rail', why: 'Bring 3.3 V, 5 V and GND from the ESP32 to the rail board so every module can share them.',
     wires: [['esp.3V3', 'rail.3V3_0', '#f08a24'], ['esp.5V', 'rail.5V_0', '#e5392f'], ['esp.GND1', 'rail.GND_0', '#222428']] },
@@ -26,10 +32,12 @@ export const GUIDE = [
     wires: [['sr.VCC', 'rail.5V_4', '#e5392f'], ['sr.GND', 'rail.GND_8', '#222428'], ['sr.DATA', 'esp.23', '#00c2a8'], ['sr.CLOCK', 'esp.18', '#f2c230'], ['sr.LATCH', 'esp.13', '#b06ee0']] },
   { title: 'LED indicator panel (17 LEDs)', part: 'panel', option: ['leds', 'single'], why: 'Each driver output Qn goes to LED Ln (each LED has its own 330 Ω resistor). The panel GND bus joins the GND rail.',
     wires: [...Array.from({ length: 17 }, (_, i) => ['sr.Q' + i, 'panel.L' + i, LED_COLORS[i]]), ['panel.GND', 'rail.GND_11', '#222428']] },
-  { title: 'LED driver (PCA9685, I2C)', part: 'pca', option: ['leds', 'rgb'], why: 'Shares the LCD’s I2C bus: SDA → GPIO21, SCL → GPIO22 (two jumpers on the same ESP32 pins is fine). VCC from 5 V so the green and blue LEDs are bright. OE stays unconnected (outputs on).',
+  { title: 'LED driver (PCA9685, I2C)', part: 'pca', option: [['leds', 'rgb'], ['board', 'breakout']], why: 'Shares the LCD’s I2C bus: SDA → GPIO21, SCL → GPIO22 (two jumpers on the same ESP32 pins is fine). VCC from 5 V so the green and blue LEDs are bright. OE stays unconnected (outputs on).',
     wires: [['pca.VCC', 'rail.5V_4', '#e5392f'], ['pca.GND', 'rail.GND_8', '#222428'], ['pca.SDA', 'esp.21', '#2b8fd6'], ['pca.SCL', 'esp.22', '#f2c230']] },
-  { title: 'RGB LED panel (5 LEDs)', part: 'rgb', option: ['leds', 'rgb'], why: 'Channel 3n → red leg of LED n, 3n+1 → green, 3n+2 → blue (the PCA9685 has the resistors). The shared cathode goes to GND.',
-    wires: [...Array.from({ length: 15 }, (_, n) => ['pca.PWM' + n, 'rgb.' + 'RGB'[n % 3] + Math.floor(n / 3), ['#e5392f', '#2fbf5b', '#2f7de1'][n % 3]]), ['rgb.GND', 'rail.GND_11', '#222428']] },
+  rgbPanelStep('pca', 'breakout', 'the PCA9685 board has the resistors'),
+  { title: 'LED driver (PCA9685 servo shield, I2C)', part: 'pcas', option: [['leds', 'rgb'], ['board', 'shield']], why: 'The Uno-style servo shield does not plug onto an ESP32: use male-to-female jumpers from its header pins. SDA → GPIO21, SCL → GPIO22 (shared with the LCD), 5V and GND from the rails, VCC-select jumper on 5V so the green and blue LEDs are bright. The green V+ screw terminal is servo power: leave it empty.',
+    wires: [['pcas.VCC', 'rail.5V_4', '#e5392f'], ['pcas.GND', 'rail.GND_8', '#222428'], ['pcas.SDA', 'esp.21', '#2b8fd6'], ['pcas.SCL', 'esp.22', '#f2c230']] },
+  rgbPanelStep('pcas', 'shield', 'use only the PWM (signal) pin of each servo header; the shield has 220 Ω resistors on the outputs'),
   { title: 'Buzzer', part: 'buzz', why: 'SIG → GPIO19 drives the S8050 transistor, which switches the buzzer from 5 V.',
     wires: [['buzz.VCC', 'rail.5V_5', '#e5392f'], ['buzz.GND', 'rail.GND_9', '#222428'], ['buzz.SIG', 'esp.19', '#b06ee0']] },
   { title: 'Pump power: AAA batteries through the relay', part: 'psu', why: 'Battery + (red lead) goes to both COM terminals; each NO feeds a pump’s red lead; each pump’s black lead returns to battery − (black lead). Battery − also joins the GND rail.',
@@ -38,12 +46,17 @@ export const GUIDE = [
 ];
 
 // ---------- build options ----------
+// `when`: the option only matters (and is only shown) in that build, e.g. the PWM board only with RGB LEDs
 export const OPTIONS = {
   leds: { title: 'LED indicators', choices: { single: '17 single LEDs + 74HC595', rgb: '5 RGB LEDs + PCA9685' } },
+  board: { title: 'PCA9685 board', when: ['leds', 'rgb'], choices: { breakout: 'Small breakout board', shield: 'Servo shield (Uno size)' } },
   level: { title: 'Tank level sensor', choices: { ultrasonic: 'HC-SR04 ultrasonic', probes: 'DIY wire probes' } },
 };
-export const DEFAULT_OPTIONS = { leds: 'single', level: 'ultrasonic' };
-export const inBuild = (opt, options) => !opt || options[opt[0]] === opt[1];
+export const DEFAULT_OPTIONS = { leds: 'single', board: 'breakout', level: 'ultrasonic' };
+// an `option` is one [key, value] pair or a list of them (all must match)
+const optPairs = opt => !opt ? [] : Array.isArray(opt[0]) ? opt : [opt];
+export const inBuild = (opt, options) => optPairs(opt).every(([k, v]) => options[k] === v);
+export const optionKeys = opt => optPairs(opt).map(([k]) => k);
 export const guideFor = options => GUIDE.filter(s => inBuild(s.option, options));
 
 const SIGNAL = ['#2fbf5b', '#2b8fd6', '#f2c230', '#b06ee0', '#00c2a8', '#e0559a', '#8bc34a', '#ff8a3d'];
