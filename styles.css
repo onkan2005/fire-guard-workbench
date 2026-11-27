@@ -186,6 +186,18 @@ table.pins{border-collapse:collapse;width:100%;font-size:11.5px}table.pins td{pa
 .sc .f input[type=text]{flex:1;min-width:0;padding:4px 7px;border:1px solid var(--ln);border-radius:6px;background:var(--bg);font-size:12.5px}
 
 .shoppage .notes{background:var(--pn2);border:1px solid var(--ln);border-radius:9px;padding:6px 12px;font-size:13px}.shoppage .notes p{margin:7px 0}.shoppage .notes b{color:#ffd36b}
+.serialin{display:flex;gap:6px;margin-top:6px}.serialin input{flex:1;min-width:0;padding:6px 8px;border:1px solid var(--ln);border-radius:6px;background:#0d1216;color:var(--ink);font:12.5px ui-monospace,Consolas,monospace}
+.calg{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(380px,1fr))}
+.calc{background:var(--pn2);border:1px solid var(--ln);border-radius:10px;padding:10px 14px 12px;display:flex;flex-direction:column;gap:4px;font-size:13px}
+.calh{display:flex;justify-content:space-between;align-items:center;gap:8px}.calh h3{margin:0;font-size:15px}
+.calc h4{margin:8px 0 2px;font-size:12.5px;color:#7cc3df}.calc ol{margin:2px 0;padding-left:20px;line-height:1.45}.calc li{margin:2px 0}
+.calc code{background:#0d1216;border:1px solid var(--ln);border-radius:4px;padding:0 4px;font-size:12px}
+.badge{font-size:11px;padding:1px 8px;border-radius:10px;font-weight:600;white-space:nowrap}.badge.auto{background:#173d2a;color:#7fe3a3}.badge.manual{background:#3d3217;color:#ffd36b}
+.calsim{background:#0f1418;border:1px solid var(--ln);border-radius:8px;padding:6px 10px 8px;margin-top:6px;display:flex;flex-direction:column;gap:6px}.calsim h4{margin:0}
+.calsim .row.wrap{display:flex;flex-wrap:wrap;gap:6px}.calin{display:flex;gap:8px;align-items:center}.calin input{width:90px;padding:4px 6px;border:1px solid var(--ln);border-radius:6px;background:var(--bg);color:var(--ink)}
+.calreply{margin:0;background:#0d1216;border:1px solid var(--ln);border-radius:6px;padding:5px 8px;font:12px/1.45 ui-monospace,Consolas,monospace;white-space:pre-wrap;color:#9fd8a8;min-height:22px}
+.calc .link{align-self:flex-start;background:none;border:none;color:#7cc3df;padding:2px 0;text-decoration:underline;cursor:pointer}
+@media (max-width:700px){.calg{grid-template-columns:1fr}}
 .pcards{display:grid;gap:8px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
 .viewer{position:fixed;inset:0;z-index:50;background:#000;display:flex;flex-direction:column}.viewer[hidden]{display:none}
 .viewer .vb{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 12px;color:#fff;background:#111}.viewer .vb span:last-child{display:flex;gap:6px}

@@ -12,6 +12,7 @@ export function buildSketch({ leds = 'single', level = 'ultrasonic' } = {}) {
 #include <Wire.h>
 #include <DHT.h>
 #include <LiquidCrystal_I2C.h>
+#include <Preferences.h>         // ESP32 flash storage for the calibration
 ${RGB ? '#include <Adafruit_PWMServoDriver.h>\n' : ''}
 // ---- pins (match the wiring guide) ----
 #define DHT_PIN       4
@@ -65,8 +66,8 @@ const int REFILL_STOP   = 95;
 const unsigned long MIN_SPRAY_MS = 5000;  // once on, the sprinkler runs at least 5 s (no on/off chatter)
 const unsigned long SETTLE_MS    = 5000;  // after spraying, wet sensors get 5 s to settle
 ${PROBES ? `const int PROBE_PIN[4]   = {32, 33, 26, 14};  // wires at 10%, 33%, 66% and 95% of the tank
-const int PROBE_LEVEL[4] = {10, 33, 66, 95};` : `const float TANK_EMPTY_CM = 9.34; // sensor-to-water distance when the tank is empty
-const float TANK_FULL_CM  = 2.0;  // ...and when it is full (the HC-SR04 can't measure under 2 cm)`}
+const int PROBE_LEVEL[4] = {10, 33, 66, 95};` : `const float TANK_EMPTY_CM = 9.34; // default sensor-to-water distance with the tank empty...
+const float TANK_FULL_CM  = 2.0;  // ...and full. Calibrate yours: type empty / full in the Serial Monitor`}
 
 DHT dht(DHT_PIN, DHT22);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
@@ -85,7 +86,14 @@ unsigned long sprayStart = 0;
 unsigned long sprayEnd = 0;
 int heldClass = 0;     // fire class shown while spraying / settling
 int dryGas = 0;        // last gas reading taken while everything was dry
-${RGB ? `
+Preferences prefs;     // calibration is saved in flash: it survives power-off and new uploads
+float tempOffset = 0;  // DHT22 correction, set with: temp 29.5
+float rawTemp = 28;    // last DHT22 reading before the correction
+float mq2CleanV = 0.3; // MQ-2 output in clean air, set with: clean
+${PROBES ? '' : `float tankEmptyCm = TANK_EMPTY_CM;  // set with: empty
+float tankFullCm = TANK_FULL_CM;    // set with: full
+float lastDistCm = -1;
+`}${RGB ? `
 // Set one RGB LED. PCA9685 duty is 0..4095, so scale 0..255 by 16.
 void setRGB(int led, const int c[]) {
   pwm.setPWM(led * 3,     0, c[0] * 16);
@@ -120,7 +128,12 @@ ${PROBES ? `  pinMode(PROBE_COM, INPUT);          // no current through the wate
   digitalWrite(RELAY_REF, RELAY_OFF);
   pinMode(BUZZER_PIN, OUTPUT);
   analogReadResolution(12);
-
+  prefs.begin("fireguard", false);
+  tempOffset = prefs.getFloat("tempOffset", 0);
+  mq2CleanV = prefs.getFloat("mq2Clean", 0.3);
+${PROBES ? '' : `  tankEmptyCm = prefs.getFloat("tankEmpty", TANK_EMPTY_CM);
+  tankFullCm = prefs.getFloat("tankFull", TANK_FULL_CM);
+`}
   dht.begin();
   Wire.begin(21, 22);
   lcd.init();
@@ -138,6 +151,7 @@ ${RGB ? `  pwm.begin();
   lcd.setCursor(0, 1);
   lcd.print("Warming up...");
   Serial.println("Fire Guard ready");
+  printCalibration();
   delay(1500);
   lcd.clear();
 }
@@ -172,7 +186,10 @@ float readDistanceCm() {
 int readTankPercent() {
   float d = readDistanceCm();
   if (d < 0) return tankPct;            // no echo: keep the last reading
-  float pct = (TANK_EMPTY_CM - d) * 100.0 / (TANK_EMPTY_CM - TANK_FULL_CM);
+  lastDistCm = d;
+  float span = tankEmptyCm - tankFullCm;
+  if (span < 1) return tankPct;         // empty/full not calibrated sensibly yet
+  float pct = (tankEmptyCm - d) * 100.0 / span;
   return constrain((int)pct, 0, 100);
 }
 `}
@@ -180,7 +197,7 @@ int readGasPpm() {
   int raw = analogRead(MQ2_PIN);
   float pinVolts = raw * 3.3 / 4095.0;
   float sensorVolts = pinVolts * 1.5;            // undo the 2/3 divider
-  float ppm = (sensorVolts - 0.3) / 3.9 * 1000.0;  // rough calibration
+  float ppm = (sensorVolts - mq2CleanV) / 3.9 * 1000.0;  // 0 ppm = the clean-air reading saved by: clean
   return max(0, (int)ppm);
 }
 
@@ -194,6 +211,77 @@ int fireClass() {
   return 1;
 }
 
+// ---- calibration: type these in the Serial Monitor (115200 baud, line ending "Newline") ----
+//   clean         MQ-2 in clean air, after a few minutes of warm-up: that reading becomes 0 ppm
+//   temp 29.5     what a reference thermometer next to the DHT22 reads: corrects the DHT22
+${PROBES ? '' : `//   empty         with the tank empty: the HC-SR04 measures the distance to the bottom
+//   full          with the tank filled to your full mark: measures the distance to the water
+//   dist          prints the distance to the water right now
+`}//   cal           shows the saved values         reset   back to the defaults in this code
+void printCalibration() {
+  Serial.printf("Calibration: DHT22 offset %.1f C, MQ-2 clean air %.2f V", tempOffset, mq2CleanV);
+${PROBES ? '' : `  Serial.printf(", tank empty %.1f cm, full %.1f cm", tankEmptyCm, tankFullCm);
+`}  Serial.println();
+}
+${PROBES ? '' : `
+// Average 10 readings so one stray echo can't spoil the calibration.
+float measureCm() {
+  float sum = 0;
+  int n = 0;
+  for (int i = 0; i < 10; i++) {
+    float d = readDistanceCm();
+    if (d > 0) { sum += d; n++; }
+    delay(60);
+  }
+  return n > 0 ? sum / n : -1;
+}
+`}
+void handleSerial() {
+  if (Serial.available() == 0) return;
+  String cmd = Serial.readStringUntil('\n');
+  if (cmd.indexOf("temp") >= 0) {
+    int sp = cmd.indexOf(' ');
+    float ref = cmd.substring(sp + 1).toFloat();
+    if (sp < 0 || ref < -20 || ref > 80) { Serial.println("Type: temp 29.5  (what your reference thermometer reads)"); return; }
+    tempOffset = ref - rawTemp;
+    temperature = rawTemp + tempOffset;
+    prefs.putFloat("tempOffset", tempOffset);
+    Serial.printf("Saved: DHT22 read %.1f C, thermometer %.1f C -> offset %.1f C\n", rawTemp, ref, tempOffset);
+  } else if (cmd.indexOf("clean") >= 0) {
+    float sum = 0;
+    for (int i = 0; i < 20; i++) { sum += analogRead(MQ2_PIN) * 3.3 / 4095.0 * 1.5; delay(50); }
+    mq2CleanV = sum / 20;
+    prefs.putFloat("mq2Clean", mq2CleanV);
+    Serial.printf("Saved: MQ-2 clean air = %.2f V (now reads 0 ppm)\n", mq2CleanV);
+    if (mq2CleanV > 1.5) Serial.println("That is high for clean air: let it warm up longer, air the room, then type clean again.");
+  }${PROBES ? '' : ` else if (cmd.indexOf("empty") >= 0 || cmd.indexOf("full") >= 0) {
+    bool empty = cmd.indexOf("empty") >= 0;
+    float d = measureCm();
+    if (d < 0) { Serial.println("No echo: check the HC-SR04 wiring and that it points straight down at the water."); return; }
+    if (empty) { tankEmptyCm = d; prefs.putFloat("tankEmpty", d); }
+    else { tankFullCm = d; prefs.putFloat("tankFull", d); }
+    Serial.printf("Saved: tank %s = %.1f cm from the sensor", empty ? "empty" : "full", d);
+    Serial.println();
+    if (!empty && d < 3) Serial.println("Warning: closer than 3 cm. The HC-SR04 can't measure under 2 cm; set your full mark lower.");
+    if (tankEmptyCm - tankFullCm < 2) Serial.println("Warning: empty and full are less than 2 cm apart. Do empty with the tank empty and full with it full.");
+  } else if (cmd.indexOf("dist") >= 0) {
+    Serial.printf("Distance to the water: %.1f cm", readDistanceCm());
+    Serial.println();
+  }`} else if (cmd.indexOf("reset") >= 0) {
+    prefs.clear();
+    tempOffset = 0;
+    mq2CleanV = 0.3;
+${PROBES ? '' : `    tankEmptyCm = TANK_EMPTY_CM;
+    tankFullCm = TANK_FULL_CM;
+`}    Serial.println("Calibration reset to the defaults in the code.");
+    printCalibration();
+  } else if (cmd.indexOf("cal") >= 0) {
+    printCalibration();
+  } else {
+    Serial.println("Commands: clean, temp 29.5, ${PROBES ? '' : 'empty, full, dist, '}cal, reset");
+  }
+}
+
 void lcdLine(int row, String text) {
   while (text.length() < 20) text += " ";
   lcd.setCursor(0, row);
@@ -202,12 +290,13 @@ void lcdLine(int row, String text) {
 
 void loop() {
   unsigned long now = millis();
+  handleSerial();                       // calibration commands typed in the Serial Monitor
 
   if (now - lastDht >= 2000) {          // the DHT22 needs 2 s between reads
     lastDht = now;
     float t = dht.readTemperature();
     float h = dht.readHumidity();
-    if (!isnan(t)) temperature = t;
+    if (!isnan(t)) { rawTemp = t; temperature = t + tempOffset; }
     if (!isnan(h)) humidity = h;
   }
 
@@ -278,8 +367,8 @@ ${RGB ? `  setRGB(RGB_SPR, sprinkler ? GREEN : BLUE);
 
   if (now - lastLog >= 2000) {
     lastLog = now;
-    Serial.printf("T=%.1fC H=%.0f%% gas=%dppm tank=%d%% flame=%d spr=%d ref=%d\n",
-                  temperature, humidity, gasPpm, tankPct, flame, sprinkler, refill);
+    Serial.printf("T=%.1fC H=%.0f%% gas=%dppm tank=%d%%${PROBES ? '' : ' dist=%.1fcm'} flame=%d spr=%d ref=%d\n",
+                  temperature, humidity, gasPpm, tankPct${PROBES ? '' : ', lastDistCm'}, flame, sprinkler, refill);
   }
 }
 `;
@@ -287,12 +376,8 @@ ${RGB ? `  setRGB(RGB_SPR, sprinkler ? GREEN : BLUE);
 
 export const DEFAULT_SKETCH = buildSketch();
 
-// The default sketch as it was before the wet-sensor update (minimum spray time, held readings while wet).
-// Used once on load: a saved, unedited copy of it is upgraded to the current default.
-const WET_UPDATE = [
-  [/const unsigned long MIN_SPRAY_MS[^\n]*\nconst unsigned long SETTLE_MS[^\n]*\n/, ''],
-  [/unsigned long sprayStart = 0;\nunsigned long sprayEnd = 0;\nint heldClass[^\n]*\nint dryGas[^\n]*\n/, ''],
-  [/  bool wasSpraying = sprinkler;[\s\S]*?  else dryGas = gasPpm;\n/, '  sprinkler = fire && tankPct > 2;\n'],
-  [/  if \(settling\) \{\n    if \(cls > heldClass\)[\s\S]*?    heldClass = cls;\n  \}\n/, ''],
-];
-export function previousSketch(opts) { return WET_UPDATE.reduce((s, [a, b]) => s.replace(a, b), buildSketch(opts)); }
+// Fingerprints of every earlier default sketch (all build options). A saved copy that matches one was never
+// edited, so on load it is upgraded to the current default firmware.
+const OLD_DEFAULTS = new Set(['b56b166f', '82efd895', '5259a80c', '7669663a', '4318b447', '42ffbfc5', '2b267f86', '7910d3a0']);
+export const sketchHash = s => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return x.toString(16).padStart(8, '0'); };
+export const isOldDefault = code => OLD_DEFAULTS.has(sketchHash(code));

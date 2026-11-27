@@ -8,14 +8,14 @@ export class World {
   constructor() { this.reset(); }
   reset() {
     Object.assign(this, {
-      temp: AMB, hum: 62, fire: false, hp: 0, intensity: 70, gasLeak: 50, smoke: 0, tank: 70, sprPump: false, refPump: false,
+      temp: AMB, hum: 62, fire: false, hp: 0, intensity: 70, gasLeak: 50, smoke: 0, tank: 70, sprPump: false, refPump: false, pumpPower: true,
       overflow: 0, dry: 0, t: 0, phase: 'before', sprayL: 0, lastSprayL: 0, totalSprayL: 0, refilledL: 0,
     });
   }
   get flameVisible() { return this.fire && this.hp > 0; }
   get gasPpm() { return Math.round(this.gasLeak + this.smoke); }
   usDistanceMm() { return TANK_FACE_MM - TANK_FULL_MM * this.tank / 100 + (Math.random() - 0.5) * 0.6; }
-  get spraying() { return this.sprPump && this.tank > 0.3; }
+  get spraying() { return this.sprPump && this.pumpPower && this.tank > 0.3; } // pumpPower: the pump battery switch
   ignite() { this.fire = true; this.hp = 100; this.phase = 'during'; }
   extinguish() { this.fire = false; this.hp = 0; }
   step(dt) {
@@ -29,8 +29,8 @@ export class World {
       this.tank -= used; this.sprayL += used * TANK_LITRES / 100; this.totalSprayL += used * TANK_LITRES / 100;
       if (this.fire) { this.hp -= 6 * dt; if (this.hp <= 0) this.extinguish(); }
     } else if (this.sprayL > 0) { this.lastSprayL = this.sprayL; this.sprayL = 0; }
-    this.dry = this.sprPump && !spray ? this.dry + dt : 0;
-    if (this.refPump) { const before = this.tank; this.tank += 3.5 * dt; if (this.tank > 100) { this.overflow += (this.tank - 100); this.tank = 100; } this.refilledL += (this.tank - before) * TANK_LITRES / 100; }
+    this.dry = this.sprPump && this.pumpPower && !spray ? this.dry + dt : 0;
+    if (this.refPump && this.pumpPower) { const before = this.tank; this.tank += 3.5 * dt; if (this.tank > 100) { this.overflow += (this.tank - 100); this.tank = 100; } this.refilledL += (this.tank - before) * TANK_LITRES / 100; }
     this.overflow = Math.max(0, this.overflow - 2 * dt);
     const smokeTarget = fl ? 260 * this.hp / 100 : 0;
     this.smoke += (smokeTarget - this.smoke) * Math.min(1, 0.35 * dt);

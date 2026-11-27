@@ -63,6 +63,19 @@ Print and CSV export are there too.
 
 The side panels hide with the **‹ ›** buttons on the edges of the 3D view (or the **[** and **]** keys).
 
+## Calibration
+
+The **Calibration** page (top bar) lists every component in your build that needs calibrating or adjusting.
+
+- **Automatic** (the firmware calibrates itself from a Serial Monitor command, 115200 baud, line ending Newline, and saves it in the ESP32's flash with the Preferences library, so it survives power-off and new uploads):
+  - **HC-SR04**: `empty` with the tank empty, `full` with it filled to your full mark (switch the pump battery off first). `dist` shows the distance now.
+  - **MQ-2**: `clean` in clean air after warm-up: that reading becomes 0 ppm.
+  - **DHT22** (optional): `temp 29.5` with a trusted thermometer's reading saves an offset.
+  - `cal` shows the saved values, `reset` goes back to the defaults in the code.
+- **Manual**: flame sensor sensitivity (its potentiometer), LCD contrast (backpack potentiometer), DIY probe heights, RGB colour mix.
+
+Each automatic card can also be tried on the simulated board, and the Serial tab has an input box for the same commands.
+
 ## Keeping the sensors dry
 
 In the Assembled layout the sprinkler sprays a narrow cone straight down over the fire. The DHT22 and MQ-2 sit high

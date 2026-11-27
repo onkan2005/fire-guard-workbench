@@ -9,7 +9,7 @@ import { bomFor } from '../src/bom.js';
 import { DEFAULT_SKETCH } from '../src/firmware.js';
 
 const KEY = 'fireguard-workbench-v1';
-export const SECTIONS = ['boot', 'wiring', 'firmware', 'scenarios', 'hcsr04', 'leds', 'miswiring', 'compiler', 'runtime', 'layout', 'reset', 'inspect', 'trace', 'datalog', 'options', 'checklist', 'persistence'];
+export const SECTIONS = ['boot', 'wiring', 'firmware', 'scenarios', 'hcsr04', 'leds', 'miswiring', 'compiler', 'runtime', 'layout', 'reset', 'inspect', 'trace', 'datalog', 'options', 'calibration', 'checklist', 'persistence'];
 
 export async function run(only = SECTIONS) {
   const fg = window.__fg; if (!fg) throw new Error('Open the workbench page first');
@@ -35,6 +35,7 @@ export async function run(only = SECTIONS) {
   const finishAnim = () => { for (let i = 0; i < 80 && fg.layoutBusy; i++) fg.stepLayout(0.05); };
   const near = (a, b, tol) => Math.abs(a - b) <= tol;
   const t0 = performance.now();
+  const nvsBackup = JSON.stringify(fg.nvs.data); fg.nvs.clear(); fg.world.pumpPower = true; // tests start uncalibrated; the user's calibration is put back after
 
   const realConfirm = window.confirm; window.confirm = () => true; // option switches ask about the code; tests always accept
   for (const [k, v] of Object.entries(DEFAULT_OPTIONS)) if (fg.options[k] !== v) fg.setOption(k, v);
@@ -462,6 +463,56 @@ void loop() { delay(1000); }
       ok('Back to default: code is the 74HC595 + HC-SR04 firmware', /shiftOut/.test(fg.editor.value) && /pulseIn/.test(fg.editor.value));
     }
 
+    if (only.includes('calibration')) {
+      section = 'Calibration';
+      wireAll(); fg.world.reset(); fg.nvs.clear();
+      fg.showPage('cal');
+      const calIds = () => [...document.querySelectorAll('#calPage [data-cal]')].map(c => c.dataset.cal);
+      ok('Calibration page replaces the 3D bench', !$('calPage').hidden && getComputedStyle(document.querySelector('main.app')).display === 'none');
+      ok('Default build: HC-SR04, MQ-2, DHT22 automatic; flame sensor, LCD manual', ['us', 'mq2', 'dht', 'flame', 'lcd'].every(id => calIds().includes(id)) && !calIds().includes('probe'), calIds());
+      ok('Automatic cards are badged and have simulator buttons', ['us', 'mq2', 'dht'].every(id => document.querySelector(`#calPage [data-cal="${id}"] .badge.auto`) && document.querySelector(`#calPage [data-act^="${id}:"]`)));
+      fg.showPage('bench');
+      let r = await runCode(fg.editor.value, 2500);
+      ok('Boot prints the calibration in use', /Calibration: DHT22 offset 0\.0 C, MQ-2 clean air 0\.30 V, tank empty 9\.3 cm, full 2\.0 cm/.test(r.serial), (r.serial.match(/Calibration:[^\n]*/) || [''])[0]);
+      await fg.serialSend('cal'); await sim(400);
+      ok('Serial input box: "cal" is answered', serial().split('\n').filter(l => l.startsWith('Calibration:')).length >= 2);
+      // pretend the real tank is different: "empty" taken at 20 % and "full" at 80 % of the model tank
+      fg.world.pumpPower = false; fg.world.tank = 20; await sim(400);
+      await fg.serialSend('empty'); await sim(1500);
+      const sv = () => fg.nvs.data.fireguard || {};
+      ok('"empty" measures and saves the distance (in flash)', near(sv().tankEmpty, 9.34 - 7.34 * 0.2, 0.3), sv().tankEmpty);
+      fg.world.tank = 80; await sim(400); await fg.serialSend('full'); await sim(1500);
+      ok('"full" measures and saves the distance', near(sv().tankFull, 9.34 - 7.34 * 0.8, 0.3), sv().tankFull);
+      ok('Reply confirms what was saved', /Saved: tank full = \d+\.\d cm/.test(serial()), (serial().match(/Saved: tank[^\n]*/g) || []).join(' | '));
+      fg.world.tank = 20; await sim(800);
+      ok('The calibrated empty level now reads about 0 %', /TANK:[0-2]%/.test(lcd()[1]), lcd()[1]);
+      fg.world.tank = 50; await sim(800);
+      ok('Half way between reads 50 %', /TANK:(4[89]|5[0-2])%/.test(lcd()[1]), lcd()[1]);
+      ok('Pump battery off: the refill pump can\'t move water', fg.world.tank === 50, fg.world.tank);
+      fg.world.pumpPower = true;
+      fg.world.gasLeak = 50; await fg.serialSend('clean'); await sim(1800);
+      ok('"clean" saves the MQ-2 clean-air voltage', near(sv().mq2Clean, 0.495, 0.08), sv().mq2Clean);
+      fg.world.temp = 28; await sim(2500); await fg.serialSend('temp 30'); await sim(600);
+      ok('"temp 30" saves a DHT22 offset of about +2 °C', near(sv().tempOffset, 2, 0.4), sv().tempOffset);
+      ok('LCD shows the corrected temperature', /T:30C/.test(lcd()[2]), lcd()[2]);
+      r = await runCode(fg.editor.value, 2500);
+      ok('Calibration survives a restart (saved in flash)', /tank empty 7\.\d cm, full 3\.\d cm/.test(r.serial), (r.serial.match(/Calibration:[^\n]*/) || [''])[0]);
+      await fg.serialSend('reset'); await sim(400);
+      ok('"reset" clears every saved value', !sv().tankEmpty && !sv().mq2Clean && !sv().tempOffset, JSON.stringify(sv()));
+      await fg.serialSend('hello'); await sim(400);
+      ok('Unknown text lists the commands', /Commands: clean, temp 29\.5, empty, full, dist, cal, reset/.test(serial()));
+      fg.rt.stop(); fg.world.reset();
+      // probes build: no ultrasonic calibration, a manual card for the probe heights
+      fg.setOption('level', 'probes'); fg.showPage('cal');
+      ok('Probes build: probe-height card, no HC-SR04 card', calIds().includes('probe') && !calIds().includes('us'), calIds());
+      fg.setOption('leds', 'rgb'); fg.showPage('cal');
+      ok('RGB build: colour-tuning card', calIds().includes('rgb'), calIds());
+      fg.showPage('bench'); fg.setOption('leds', 'single'); fg.setOption('level', 'ultrasonic');
+      r = await runCode(fg.editor.value, 2500);
+      ok('Default firmware still compiles and runs with no [sim] warnings', r.state === 'running' && !/\[sim\]/.test(r.serial), (r.serial.match(/\[sim\][^\n]*/g) || []).join(' | '));
+      fg.rt.stop(); fg.nvs.clear();
+    }
+
     if (only.includes('checklist')) {
       section = 'Shopping & photos';
       const prevPage = document.body.classList.contains('page-shop') ? 'shop' : 'bench';
@@ -527,6 +578,7 @@ void loop() { delay(1000); }
     for (const [k, v] of Object.entries(DEFAULT_OPTIONS)) if (fg.options[k] !== v) fg.setOption(k, v);
     fg.rt.stop(); fg.insp.close(false); fg.clearTrace(); fg.testDriving = false; window.confirm = realConfirm;
     if (backup != null) localStorage.setItem(KEY, backup); else localStorage.removeItem(KEY);
+    fg.nvs.data = JSON.parse(nvsBackup); fg.nvs.save(); fg.world.pumpPower = true;
     if (backupChecklist != null) localStorage.setItem('fireguard-checklist-v1', backupChecklist); else localStorage.removeItem('fireguard-checklist-v1');
   }
   const passed = results.filter(r => r.pass).length, failed = results.length - passed;

@@ -18,6 +18,7 @@
   <nav class="pagesw" role="tablist" aria-label="Page">
     <button class="on" data-page="bench" role="tab" aria-selected="true">3D workbench</button>
     <button data-page="shop" role="tab" aria-selected="false">Shopping &amp; photos</button>
+    <button data-page="cal" role="tab" aria-selected="false">Calibration</button>
   </nav>
   <div class="layoutsw" role="group" aria-label="Layout">
     <button data-layout="bench" class="on" aria-pressed="true" title="Everything laid out flat on the bench for wiring">Bench layout</button>
@@ -87,6 +88,7 @@
     <section class="tab" id="tab-serial">
       <div class="row"><span class="mu">115200 baud</span><span class="sp"></span><label class="chk"><input type="checkbox" id="autoscroll" checked> Autoscroll</label><button id="clrSerial" class="sm">Clear</button></div>
       <pre id="serial" class="serial" aria-live="polite"></pre>
+      <form class="serialin" id="serialForm"><input id="serialIn" autocomplete="off" placeholder="Send to the ESP32, e.g. cal, empty, full, clean, temp 29.5" aria-label="Send to the ESP32"><button class="sm primary">Send</button></form>
     </section>
     <section class="tab" id="tab-log">
       <div class="row"><span class="mu small">Logged every second while the sketch runs, and on every change.</span><span class="sp"></span><button id="logCsv" class="sm">Download CSV</button><button id="logClr" class="sm">Clear</button></div>
@@ -98,6 +100,7 @@
   </aside>
 </main>
 <main class="shoppage" id="shopPage" hidden aria-label="Shopping and photos"></main>
+<main class="shoppage calpage" id="calPage" hidden aria-label="Calibration"></main>
 <div class="viewer" id="photoViewer" hidden role="dialog" aria-label="Photo"></div>
 <script type="module" src="src/main.js"></script>
 </body>

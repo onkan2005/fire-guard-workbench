@@ -11,6 +11,15 @@ for (const [k, f] of Object.entries({
   compareTo(o) { return this < o ? -1 : this > o ? 1 : 0; }, c_str() { return String(this); },
 })) if (!String.prototype[k]) Object.defineProperty(String.prototype, k, { value: f, writable: true, configurable: true });
 
+// Simulated ESP32 flash (NVS) for the Preferences library: kept in localStorage, so like real flash it
+// survives a reset, a new upload and a page reload.
+const NVS_KEY = 'fireguard-nvs';
+export const nvs = {
+  data: (() => { try { return JSON.parse(localStorage.getItem(NVS_KEY) || '{}'); } catch { return {}; } })(),
+  save() { try { localStorage.setItem(NVS_KEY, JSON.stringify(this.data)); } catch { } },
+  clear() { this.data = {}; this.save(); },
+};
+
 export class Runtime {
   constructor(hw, world, out) { Object.assign(this, { hw, world, out, state: 'stopped', gen: 0, vt: 0, timers: [], iter: 0, busy: false, lastError: null }); }
 
@@ -25,7 +34,7 @@ export class Runtime {
     this.stop();
     const r = this.compile(code);
     if (r.error) { this.state = 'error'; return r; }
-    this.hw.resetMCU(); this.vt = 0; this.timers = []; this.lastError = null; this.serialLine = '';
+    this.hw.resetMCU(); this.vt = 0; this.timers = []; this.lastError = null; this.serialLine = ''; this.serialIn = '';
     const gen = ++this.gen; this.state = 'running';
     this.out.sys('Upload complete. Hard resetting via RTS pin…'); // before the sketch prints anything, like a real upload
     let prog;
@@ -113,12 +122,36 @@ function makeApi(rt) {
     if (rt.serialLine.length > 400) { out.serial(rt.serialLine); rt.serialLine = ''; }
   };
   const Serial = {
-    begin() { }, end() { }, flush() { }, available: () => 0, read: () => -1, peek: () => -1,
+    begin() { }, end() { }, flush() { }, setTimeout() { },
+    // bytes typed in the Serial monitor's input box (rt.send) wait in rt.serialIn
+    available: () => (rt.serialIn || '').length,
+    read: () => { if (!rt.serialIn) return -1; const c = rt.serialIn.charCodeAt(0); rt.serialIn = rt.serialIn.slice(1); return c; },
+    peek: () => rt.serialIn ? rt.serialIn.charCodeAt(0) : -1,
+    readStringUntil: t => { const ch = typeof t === 'number' ? String.fromCharCode(t) : String(t)[0]; const s = rt.serialIn || ''; const i = s.indexOf(ch); const line = i < 0 ? s : s.slice(0, i); rt.serialIn = i < 0 ? '' : s.slice(i + 1); return line.replace(/\r$/, ''); },
+    readString: () => { const s = rt.serialIn || ''; rt.serialIn = ''; return s; },
     print: (v, f) => { const s = fmtNum(v, f); write(s); return s.length; },
     println: (v = '', f) => { const s = fmtNum(v, f) + '\n'; write(s); return s.length; },
     printf: (f, ...a) => { const s = printf(f, a); write(s); return s.length; },
     write: v => { write(typeof v === 'number' ? String.fromCharCode(v) : String(v)); return 1; },
   };
+
+  // ESP32 Preferences library (flash key/value store), backed by the simulated NVS above
+  class Preferences {
+    begin(ns = 'default') { this.ns = String(ns); nvs.data[this.ns] = nvs.data[this.ns] || {}; return true; }
+    end() { }
+    _get(k, d) { const v = this.ns && nvs.data[this.ns][k]; return v === undefined ? d : v; }
+    _put(k, v) { if (!this.ns) return 0; nvs.data[this.ns][k] = v; nvs.save(); return 4; }
+    getFloat(k, d = 0) { return this._get(k, d); } putFloat(k, v) { return this._put(k, +v); }
+    getDouble(k, d = 0) { return this._get(k, d); } putDouble(k, v) { return this._put(k, +v); }
+    getInt(k, d = 0) { return this._get(k, d); } putInt(k, v) { return this._put(k, Math.trunc(v)); }
+    getUInt(k, d = 0) { return this._get(k, d); } putUInt(k, v) { return this._put(k, Math.trunc(v)); }
+    getLong(k, d = 0) { return this._get(k, d); } putLong(k, v) { return this._put(k, Math.trunc(v)); }
+    getBool(k, d = false) { return this._get(k, d); } putBool(k, v) { return this._put(k, !!v); }
+    getString(k, d = '') { return this._get(k, d); } putString(k, v) { return this._put(k, String(v)); }
+    isKey(k) { return !!this.ns && nvs.data[this.ns][k] !== undefined; }
+    remove(k) { if (this.ns) { delete nvs.data[this.ns][k]; nvs.save(); } return true; }
+    clear() { if (this.ns) { nvs.data[this.ns] = {}; nvs.save(); } return true; }
+  }
 
   class DHT {
     constructor(p, type = 22) { this.pin = p; this.type = type; this.started = false; }
@@ -214,7 +247,7 @@ function makeApi(rt) {
     DHT11: 11, DHT22: 22, DHT21: 21, AM2301: 21, NEO_GRB: 0x52, NEO_RGB: 0x06, NEO_RGBW: 0x1B, NEO_KHZ800: 0, NEO_KHZ400: 0x100,
     DEC: 10, HEX: 16, BIN: 2, OCT: 8, PI: Math.PI, HALF_PI: Math.PI / 2, TWO_PI: Math.PI * 2, DEG_TO_RAD: Math.PI / 180, RAD_TO_DEG: 180 / Math.PI,
     A0: 36, A3: 39, A4: 32, A5: 33, A6: 34, A7: 35, ADC_0db: 0, ADC_2_5db: 1, ADC_6db: 2, ADC_11db: 3, WL_CONNECTED: 3, WIFI_STA: 1,
-    Serial, DHT, LiquidCrystal_I2C, Adafruit_NeoPixel, Adafruit_PWMServoDriver,
+    Serial, DHT, LiquidCrystal_I2C, Adafruit_NeoPixel, Adafruit_PWMServoDriver, Preferences,
     Wire: { begin(sda, scl) { if (sda != null && scl != null) mcu.i2c = { sda, scl }; }, setClock() { } },
     WiFi: { begin() { warnOnce('wifi', '[sim] Wi-Fi is not simulated; pretending to be connected.'); }, status: () => 3, mode() { }, disconnect() { }, localIP: () => '192.168.4.2', RSSI: () => -55 },
     pinMode(p, m) {

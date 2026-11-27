@@ -5,11 +5,12 @@ import { WireLayer } from './wires.js';
 import { createInspector, groupForPin } from './inspect.js';
 import { Hardware } from './hardware.js';
 import { World, TANK_LITRES } from './world.js';
-import { Runtime } from './runtime.js';
+import { Runtime, nvs } from './runtime.js';
 import { GUIDE, autoColor, OPTIONS, DEFAULT_OPTIONS, inBuild, guideFor, optionKeys } from './guide.js';
 import { createEditor } from './editor.js';
-import { DEFAULT_SKETCH, buildSketch, previousSketch } from './firmware.js';
+import { DEFAULT_SKETCH, buildSketch, isOldDefault } from './firmware.js';
 import { createShop } from './shop.js';
+import { createCalibration } from './calibrate.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -202,10 +203,12 @@ for (const w of saved.wires || []) if (pinInBuild(w.a) && pinInBuild(w.b)) addWi
 hw.rebuild();
 
 // ---------- editor + runtime ----------
-if (saved.code && saved.code === previousSketch(options)) { saved.code = buildSketch(options); migrated.push('your unedited firmware was updated: the sprinkler now runs at least 5 s and wet sensor readings are held while spraying'); }
+if (saved.code && isOldDefault(saved.code)) { saved.code = buildSketch(options); migrated.push('your unedited firmware was updated to the latest version (sensor calibration commands, minimum spray time, wet-sensor hold)'); }
 const editor = createEditor($('editor'), saved.code || buildSketch(options), () => { clearTimeout(editor._t); editor._t = setTimeout(save, 400); });
 const serialEl = $('serial');
+const serialListeners = [];
 function serialAdd(text, cls) {
+  if (!cls) serialListeners.forEach(f => f(text));
   const d = document.createElement('div'); if (cls) d.className = cls; d.textContent = text; serialEl.appendChild(d);
   while (serialEl.childNodes.length > 800) serialEl.firstChild.remove();
   if ($('autoscroll').checked) serialEl.scrollTop = serialEl.scrollHeight;
@@ -266,6 +269,19 @@ $('stop').onclick = () => { rt.stop(); hw.resetMCU(); serialAdd('Sketch stopped.
 $('resetCode').onclick = () => { if (confirm('Replace your sketch with the default Fire Guard firmware for this build?')) { editor.value = buildSketch(options); save(); } };
 $('dlIno').onclick = () => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([editor.value], { type: 'text/plain' })); a.download = 'fire_guard.ino'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
 $('clrSerial').onclick = () => { serialEl.innerHTML = ''; };
+// type into the simulated ESP32's Serial input (starts the sketch first if it isn't running)
+async function serialSend(text) {
+  text = String(text).trim(); if (!text) return;
+  if (rt.state !== 'running') {
+    let ready = false; const f = l => { if (/^Calibration:|Fire Guard ready/.test(l)) ready = true; }; serialListeners.push(f);
+    await run(); const t0 = performance.now();
+    while (!ready && rt.state === 'running' && performance.now() - t0 < 8000) await new Promise(r => setTimeout(r, 50));
+    serialListeners.splice(serialListeners.indexOf(f), 1);
+    if (rt.state !== 'running') return;
+  }
+  serialAdd('> ' + text, 'sys'); rt.serialIn = (rt.serialIn || '') + text + '\n';
+}
+$('serialForm').onsubmit = e => { e.preventDefault(); serialSend($('serialIn').value); $('serialIn').value = ''; };
 let speed = 1; $('speed').onchange = e => { speed = +e.target.value; };
 
 // ---------- tabs / views ----------
@@ -309,12 +325,14 @@ const shop = createShop({
   onFindPart: id => { showPage('bench'); selectPart(id, true); },
 });
 const renderParts = () => shop.render();
+const cal = createCalibration({ page: $('calPage'), getOptions: () => options, world, nvs, send: serialSend,
+  onSerial: f => serialListeners.push(f), findPart: id => { showPage('bench'); if (parts.has(id) && isActive(parts.get(id))) selectPart(id, true); } });
 function showPage(name) {
-  const shopOn = name === 'shop';
-  $('shopPage').hidden = !shopOn; document.querySelector('main.app').hidden = shopOn;
-  document.body.classList.toggle('page-shop', shopOn);
+  const shopOn = name === 'shop', calOn = name === 'cal';
+  $('shopPage').hidden = !shopOn; $('calPage').hidden = !calOn; document.querySelector('main.app').hidden = shopOn || calOn;
+  document.body.classList.toggle('page-shop', shopOn); document.body.classList.toggle('page-cal', calOn);
   document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('on', b.dataset.page === name); b.setAttribute('aria-selected', b.dataset.page === name); });
-  if (shopOn) shop.render(); else S.renderer.domElement.dispatchEvent(new Event('resize'));
+  if (shopOn) shop.render(); else if (calOn) cal.render(); else S.renderer.domElement.dispatchEvent(new Event('resize'));
   try { localStorage.setItem('fireguard-page', name); } catch { }
 }
 document.querySelectorAll('[data-page]').forEach(b => b.onclick = () => showPage(b.dataset.page));
@@ -337,7 +355,7 @@ addEventListener('keydown', e => {
   if (e.key === '[') $('toggleLeft').click();
   if (e.key === ']') $('toggleRight').click();
 });
-setTimeout(() => { try { if (localStorage.getItem('fireguard-page') === 'shop') showPage('shop'); } catch { } });
+setTimeout(() => { try { const pg = localStorage.getItem('fireguard-page'); if (pg === 'shop' || pg === 'cal') showPage(pg); } catch { } });
 
 // ---------- build options UI ----------
 function renderOptions() {
@@ -835,5 +853,5 @@ window.__fg = {
   get layout() { return layout; }, get layoutBusy() { return !!layoutAnim; }, get encl() { return encl; },
   stepLayout: dt => stepLayout(dt), // lets tests finish the layout animation without waiting for frames
   set testDriving(v) { testDriving = v; },
-  setOption, get options() { return options; }, shop, showPage, selectPart, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
+  setOption, get options() { return options; }, shop, showPage, selectPart, cal, nvs, serialSend, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
   simulate: async ms => { testDriving = true; while (rt.busy) await new Promise(r => setTimeout(r, 0)); for (let t = 0; t < ms; t += 50) { if (rt.state === 'running') await rt.advance(50, step); else step(0.05); } const o = hw.evaluate(); visuals(o, 0.05, performance.now() / 1000); S.dio.update(world, o, 0.05, performance.now() / 1000); wires.update(performance.now() / 1000, null); S.render(); return o; } };

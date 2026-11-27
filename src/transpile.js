@@ -7,8 +7,8 @@ const TYPES = 'void|int|float|double|bool|boolean|long|short|byte|char|word|size
 const QUAL = '(?:(?:const|static|volatile|constexpr|unsigned|signed|long|short)\\s+)*';
 const T = `${QUAL}(?:${TYPES})\\b(?:\\s*[*&]+\\s*|\\s+)`;
 const INTY = /\b(int|long|short|byte|word|size_t|u?int\d+_t|unsigned|signed)\s*[*&]?\s*$/;
-const LIBS = ['DHT', 'LiquidCrystal_I2C', 'Adafruit_NeoPixel', 'Adafruit_PWMServoDriver'];
-export const KNOWN_INCLUDES = ['Arduino.h', 'Wire.h', 'DHT.h', 'DHT_U.h', 'LiquidCrystal_I2C.h', 'Adafruit_NeoPixel.h', 'WiFi.h', 'Adafruit_Sensor.h', 'Adafruit_PWMServoDriver.h'];
+const LIBS = ['DHT', 'LiquidCrystal_I2C', 'Adafruit_NeoPixel', 'Adafruit_PWMServoDriver', 'Preferences'];
+export const KNOWN_INCLUDES = ['Arduino.h', 'Wire.h', 'DHT.h', 'DHT_U.h', 'LiquidCrystal_I2C.h', 'Adafruit_NeoPixel.h', 'WiFi.h', 'Adafruit_Sensor.h', 'Adafruit_PWMServoDriver.h', 'Preferences.h'];
 
 function protect(src) {
   const lits = []; let out = '', i = 0;
