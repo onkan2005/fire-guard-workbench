@@ -8,6 +8,8 @@
 //       heat 30     add 30 C to the temperature reading to test the fire classes (heat 0 = off)
 //       pump1       run the sprinkler pump for 2 s        pump2   run the refill pump for 2 s
 //       status      print the readings now
+//   - The LCD recovers by itself from electrical noise (pump motor, relay clicks): slower I2C, it only
+//     rewrites text that changed, and it re-syncs after every relay click and every 10 s.
 //   - Plus the normal calibration commands: clean, temp 29.5, empty, full, dist, cal, reset.
 // When the container is ready, go back to the normal sketch.
 
@@ -65,6 +67,9 @@ unsigned long sprPumpStart = 0;
 unsigned long refPumpStart = 0;
 bool sprLocked = false;        // true: the 3 s ran out, the pump stays off until the reason to run is gone
 bool refLocked = false;
+String lcdShown[4];            // what each LCD row shows now, so only changed text is sent
+unsigned long lastLcdSync = 0; // when the LCD was last re-synced
+int lastRelays = -1;           // relay outputs last time, to re-sync the LCD after a click
 
 
 DHT dht(DHT_PIN, DHT22);
@@ -120,6 +125,7 @@ void setup() {
 
   dht.begin();
   Wire.begin(21, 22);
+  Wire.setClock(50000);           // 50 kHz: slower but much less upset by noise from the pumps
   lcd.init();
   lcd.backlight();
   pwm.begin();
@@ -283,8 +289,19 @@ void handleSerial() {
 
 void lcdLine(int row, String text) {
   while (text.length() < 20) text += " ";
+  if (text == lcdShown[row]) return;    // unchanged: don't resend (fewer chances for noise to garble it)
   lcd.setCursor(0, row);
   lcd.print(text);
+  lcdShown[row] = text;
+}
+
+// Noise can knock the LCD out of step, and then every character after it is garbage until it is
+// reset. Re-initialise it and redraw everything: done after each relay click and every 10 s.
+void lcdResync() {
+  lcd.init();
+  lcd.backlight();
+  for (int i = 0; i < 4; i++) lcdShown[i] = "";
+  lastLcdSync = millis();
 }
 
 void loop() {
@@ -337,6 +354,14 @@ void loop() {
   }
   digitalWrite(RELAY_SPR, sprinkler && !sprLocked ? RELAY_ON : RELAY_OFF);
   digitalWrite(RELAY_REF, refill && !refLocked ? RELAY_ON : RELAY_OFF);
+  int relays = (sprinkler && !sprLocked ? 1 : 0) + (refill && !refLocked ? 2 : 0);
+  if (relays != lastRelays) {           // a relay just clicked: give the spike a moment, then re-sync the LCD
+    lastRelays = relays;
+    delay(50);
+    lcdResync();
+  } else if (now - lastLcdSync >= 10000) {
+    lcdResync();
+  }
 
   // ---- LED indicators ----
   int cls = fireClass();
