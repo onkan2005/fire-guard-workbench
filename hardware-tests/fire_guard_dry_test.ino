@@ -1,7 +1,11 @@
 // Fire Guard: DRY TEST version, for testing everything before the water container is ready.
 // Same as the normal sketch, plus:
 //   - The tank level is pretended (no container yet), so the refill pump no longer starts on its own.
-//     The pretend water moves: every fire sprays 3 s (tank down to 30 %), then the refill pump runs about 3 s (-> 95 %).
+//     The pretend water moves (by the clock, so a slow loop can't upset it): every fire sprays 3 s and the
+//     tank drops to 30 %, then the refill pump runs 3 s and the tank climbs back to 96 %.
+//   - A real flame flickers, so a flame seen in the last 1.5 s still counts (no red/green flashing, no restarts).
+//   - At start-up the LCD and Serial Monitor say why the ESP32 (re)started: a BROWNOUT means the pumps
+//     pulled the power down. Every pump step is printed in the Serial Monitor.
 //   - A pump may run at most 3 s at a time (pumps must not run dry for long), then it is locked out.
 //   - Serial Monitor commands (115200 baud, line ending "Newline"):
 //       tank 60     pretend the tank is 60 % full (20 starts the refill, 100 ends it, 0 = empty)
@@ -25,6 +29,7 @@
 #include <LiquidCrystal_I2C.h>
 #include <Preferences.h>         // ESP32 flash storage for the calibration
 #include <Adafruit_PWMServoDriver.h>
+#include <esp_system.h>           // esp_reset_reason(): why the ESP32 (re)started
 
 // ---- pins (match the wiring guide) ----
 #define DHT_PIN       4
@@ -78,9 +83,13 @@ const float TANK_FULL_CM  = 2.0;  // ...and full. Calibrate yours: type empty / 
 bool fakeTank = true;          // true: pretend the tank level below. Type "real" to use the HC-SR04
 int fakeTankPct = 60;          // 60 % = no refill, and the sprinkler is allowed. Change with: tank 20
 float fakeTankF = 60;          // the pretended level with decimals: it drains while spraying and fills while refilling
-float sprayStep = 2.5;         // % per 250 ms while spraying: set when a spray starts so 3 s always ends at 30 % (the refill level)
-bool wasPumping = false;       // the sprinkler pump was running on the last loop
-const float REFILL_FILL = 5.5; // % per 250 ms: about 3 s of refilling takes it from 30 % back to 95 %
+float sprayFrom = 60;          // pretend level when the current spray started (it drains to REFILL_START in 3 s)
+float fillFrom = 30;           // pretend level when the current refill started (it fills to REFILL_STOP + 1 in 3 s)
+bool wasSpraying2 = false;     // the sprinkler pump was running on the last loop
+bool wasRefilling = false;     // the refill pump was running on the last loop
+const unsigned long FLAME_HOLD_MS = 1500;  // a flame seen in the last 1.5 s still counts (real flames flicker)
+unsigned long lastFlameSeen = 0;
+int relayState[2] = {-1, -1};  // what each relay pin was last set to, so it is only changed when needed
 float testHeat = 0;            // added to the temperature, for testing fire classes. Change with: heat 30
 const unsigned long MAX_PUMP_MS = 3000;  // longest a pump may run without water
 unsigned long sprPumpStart = 0;
@@ -93,6 +102,13 @@ int lastRelays = -1;           // relay outputs last time, to re-sync the LCD af
 int dhtFails = 0;              // DHT22 reads in a row that gave no answer (NaN)
 const int DHT_ERR_AFTER = 3;   // pump noise spoils the odd read: keep the last good value, only show an error after 3 in a row (6 s)
 
+
+// Set relay 0 (sprinkler) or 1 (refill), but only touch the pin when its state really changes.
+void setRelay(int idx, bool on) {
+  if (relayState[idx] == (on ? 1 : 0)) return;
+  relayState[idx] = on ? 1 : 0;
+  relayWrite(idx == 0 ? RELAY_SPR : RELAY_REF, on);
+}
 
 DHT dht(DHT_PIN, DHT22);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
@@ -133,8 +149,8 @@ void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   digitalWrite(TRIG_PIN, LOW);
   pinMode(ECHO_PIN, INPUT);
-  relayWrite(RELAY_SPR, false);   // released = OFF (see relayWrite)
-  relayWrite(RELAY_REF, false);
+  setRelay(0, false);             // released = OFF (see relayWrite)
+  setRelay(1, false);
   pinMode(BUZZER_PIN, OUTPUT);
   analogReadResolution(12);
   prefs.begin("fireguard", false);
@@ -152,11 +168,20 @@ void setup() {
   pwm.setPWMFreq(1000);           // 1 kHz: no visible flicker
   for (int i = 0; i < 5; i++) setRGB(i, OFF);
 
+  // why did the ESP32 (re)start? A BROWNOUT right when a pump starts means the pumps pull the 5 V down.
+  int rr = esp_reset_reason();
+  String why = rr == ESP_RST_POWERON ? "power on" : rr == ESP_RST_EXT ? "EN button" : rr == ESP_RST_SW ? "upload/restart" :
+               rr == ESP_RST_BROWNOUT ? "BROWNOUT" : rr == ESP_RST_PANIC ? "CRASH" :
+               (rr == ESP_RST_INT_WDT || rr == ESP_RST_TASK_WDT || rr == ESP_RST_WDT) ? "WATCHDOG" : "other";
   lcd.setCursor(0, 0);
   lcd.print("Fire Guard DRY TEST");
   lcd.setCursor(0, 1);
   lcd.print("Warming up...");
+  lcd.setCursor(0, 2);
+  lcd.print("Start: " + why);
   Serial.println("Fire Guard ready");
+  Serial.println("TEST: started because of: " + why);
+  if (rr == ESP_RST_BROWNOUT) Serial.println("TEST: BROWNOUT = the 5 V dropped too low. The pumps/relays are pulling it down: use a 5 V 2 A charger, and fit the diodes.");
   printCalibration();
   delay(1500);
   lcd.clear();
@@ -237,6 +262,7 @@ void handleSerial() {
     fakeTank = true;
     fakeTankPct = constrain(cmd.substring(cmd.indexOf(' ') + 1).toInt(), 0, 100);
     fakeTankF = fakeTankPct;
+    sprayFrom = fakeTankF;
     Serial.printf("TEST: pretending the tank is %d%% full\n", fakeTankPct);
     return;
   }
@@ -348,7 +374,9 @@ void loop() {
   if (now - lastFast < 250) return;
   lastFast = now;
 
-  flame = digitalRead(FLAME_PIN) == LOW;
+  bool flameNow = digitalRead(FLAME_PIN) == LOW;
+  if (flameNow) lastFlameSeen = now;
+  flame = flameNow || (lastFlameSeen > 0 && now - lastFlameSeen < FLAME_HOLD_MS);  // a real flame flickers: hold it
   gasPpm = readGasPpm();
   tankPct = readTankPercent();
 
@@ -373,25 +401,37 @@ void loop() {
   else if (sprPumpStart == 0) sprPumpStart = now;
   if (sprinkler && !sprLocked && now - sprPumpStart >= MAX_PUMP_MS) {
     sprLocked = true;
-    Serial.println("TEST: sprinkler pump stopped after 3 s (no water). It stays off until the fire is gone.");
+    if (fakeTank && fakeTankF > REFILL_START) fakeTankF = REFILL_START;  // 3 s of spraying ends at the refill level
+    Serial.println(fakeTank ? "TEST: sprinkler ran 3 s, pretend tank now 30 % -> refill starts" : "TEST: sprinkler pump stopped after 3 s (no water). It stays off until the fire is gone.");
   }
   if (!refill) { refLocked = false; refPumpStart = 0; }
   else if (refPumpStart == 0) refPumpStart = now;
   if (refill && !refLocked && now - refPumpStart >= MAX_PUMP_MS) {
     refLocked = true;
-    Serial.println("TEST: refill pump stopped after 3 s (no water). Type tank 100 to end the refill (it stops at 95 %).");
+    if (fakeTank) fakeTankF = REFILL_STOP + 1;  // 3 s of refilling ends full, so the refill switches off
+    Serial.println(fakeTank ? "TEST: refill ran 3 s, pretend tank full again" : "TEST: refill pump stopped after 3 s (no water). Type tank 100 to end the refill (it stops at 95 %).");
   }
-  relayWrite(RELAY_SPR, sprinkler && !sprLocked);
-  relayWrite(RELAY_REF, refill && !refLocked);
-  // DRY TEST: pretend the water moves, so one fire runs the whole cycle with the real logic:
-  // sprinkler 3 s (tank 60 -> 30 %), then the refill starts at 30 % and runs about 3 s (-> 95 %), then stops.
+  setRelay(0, sprinkler && !sprLocked);
+  setRelay(1, refill && !refLocked);
+  // DRY TEST: pretend the water moves, so one fire runs the whole cycle with the real logic. It goes by
+  // the clock (not by loop passes), so a slow loop can't stop it: spraying takes the tank to 30 % in 3 s,
+  // the refill then starts (tank <= 30 %) and takes it to 96 % in 3 s, and the refill stops (tank >= 95 %).
   if (fakeTank) {
-    bool pumping = sprinkler && !sprLocked;
-    if (pumping && !wasPumping) sprayStep = max(0.0, (fakeTankF - REFILL_START) / (MAX_PUMP_MS / 250.0));
-    wasPumping = pumping;
-    if (pumping) fakeTankF = constrain(fakeTankF - sprayStep, 0, 100);
-    if (refill && !refLocked) fakeTankF = constrain(fakeTankF + REFILL_FILL, 0, 100);
-    fakeTankPct = (int)fakeTankF;
+    bool sprOn = sprinkler && !sprLocked, refOn = refill && !refLocked;
+    if (sprOn && !wasSpraying2) { sprayFrom = fakeTankF; Serial.println("TEST: sprinkler pump ON"); }
+    if (refOn && !wasRefilling) { fillFrom = fakeTankF; Serial.println("TEST: refill pump ON"); }
+    if (!refOn && wasRefilling) Serial.println("TEST: refill pump OFF");
+    wasSpraying2 = sprOn;
+    wasRefilling = refOn;
+    if (sprOn && sprayFrom > REFILL_START) {
+      float f = constrain((now - sprPumpStart) / (float)MAX_PUMP_MS, 0, 1);
+      fakeTankF = sprayFrom - (sprayFrom - REFILL_START) * f;
+    }
+    if (refOn) {
+      float f = constrain((now - refPumpStart) / (float)MAX_PUMP_MS, 0, 1);
+      fakeTankF = fillFrom + (REFILL_STOP + 1 - fillFrom) * f;
+    }
+    fakeTankPct = (int)(fakeTankF + 0.5);
   }
   int relays = (sprinkler && !sprLocked ? 1 : 0) + (refill && !refLocked ? 2 : 0);
   if (relays != lastRelays) {           // a relay just clicked: give the spike a moment, then re-sync the LCD

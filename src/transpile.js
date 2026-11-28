@@ -8,7 +8,7 @@ const QUAL = '(?:(?:const|static|volatile|constexpr|unsigned|signed|long|short)\
 const T = `${QUAL}(?:${TYPES})\\b(?:\\s*[*&]+\\s*|\\s+)`;
 const INTY = /\b(int|long|short|byte|word|size_t|u?int\d+_t|unsigned|signed)\s*[*&]?\s*$/;
 const LIBS = ['DHT', 'LiquidCrystal_I2C', 'Adafruit_NeoPixel', 'Adafruit_PWMServoDriver', 'Preferences'];
-export const KNOWN_INCLUDES = ['Arduino.h', 'Wire.h', 'DHT.h', 'DHT_U.h', 'LiquidCrystal_I2C.h', 'Adafruit_NeoPixel.h', 'WiFi.h', 'Adafruit_Sensor.h', 'Adafruit_PWMServoDriver.h', 'Preferences.h'];
+export const KNOWN_INCLUDES = ['Arduino.h', 'Wire.h', 'DHT.h', 'DHT_U.h', 'LiquidCrystal_I2C.h', 'Adafruit_NeoPixel.h', 'WiFi.h', 'Adafruit_Sensor.h', 'Adafruit_PWMServoDriver.h', 'Preferences.h', 'esp_system.h'];
 
 function protect(src) {
   const lits = []; let out = '', i = 0;

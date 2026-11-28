@@ -267,6 +267,9 @@ function makeApi(rt) {
       level(p, v);
     },
     MSBFIRST: 1, LSBFIRST: 0,
+    // why the ESP32 last restarted (esp_system.h); the simulator always starts from power-on
+    esp_reset_reason: () => 1, ESP_RST_UNKNOWN: 0, ESP_RST_POWERON: 1, ESP_RST_EXT: 2, ESP_RST_SW: 3, ESP_RST_PANIC: 4,
+    ESP_RST_INT_WDT: 5, ESP_RST_TASK_WDT: 6, ESP_RST_WDT: 7, ESP_RST_DEEPSLEEP: 8, ESP_RST_BROWNOUT: 9,
     // pulseIn(pin, HIGH, timeoutUs): length of the next HIGH pulse in µs, 0 on timeout (used for the HC-SR04 ECHO)
     pulseIn(p, state = 1, timeout = 1000000) {
       if (!pin(p)) return 0;
