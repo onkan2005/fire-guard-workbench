@@ -200,6 +200,21 @@ function addWire(a, b, color, quiet) {
 function removeWire(id) { hw.wires = hw.wires.filter(w => w.id !== id); wires.remove(id); selWire(null); changed(); }
 function changed() { hw.rebuild(); renderGuide(); renderChecks(); if (typeof renderFaults === 'function' && $('faults').innerHTML) renderFaults(); save(); if (typeof tracedWire !== 'undefined' && tracedWire) traceWire(tracedWire); else if (typeof tracedPin !== 'undefined' && tracedPin) traceNet(tracedPin); }
 const pinInBuild = id => { const p = parts.get(id.split('.')[0]); return p && isActive(p); };
+// a reverted update briefly moved the LCD or the PCA9685 to its own I2C bus on GPIO18/23 and rewired saved projects;
+// put every I2C jumper back on the breadboard's SDA/SCL rows (GPIO21/22), as the guide has it
+if ((saved.wires || []).some(w => [w.a, w.b].some(p => /^(lcd|pcas?)\.S(DA|CL)$/.test(p)) && [w.a, w.b].some(p => p === 'esp.18' || p === 'esp.23'))) {
+  const i2c = p => /^(lcd|pcas?)\.S(DA|CL)$/.test(p) || /^rail\.S(DA|CL)_/.test(p);
+  saved.wires = saved.wires.filter(w => !i2c(w.a) && !i2c(w.b));
+  const st = GUIDE.filter(s => s.wires.some(([a, b]) => i2c(a) || i2c(b)));
+  const pca = (saved.options || {}).board === 'shield' ? 'pcas' : 'pca';
+  const rgb = (saved.options || {}).leds === 'rgb';
+  for (const s of st) for (const [a, b, color] of s.wires) {
+    if (!i2c(a) && !i2c(b)) continue;                                   // only the I2C jumpers of these steps
+    if (/^pcas?\./.test(a) && (!rgb || !a.startsWith(pca + '.'))) continue; // the PCA9685 board that is in this build
+    saved.wires.push({ a, b, color });
+  }
+  migrated.push('the LCD and PCA9685 are back on the shared SDA/SCL rows (GPIO21/22), undoing the separate-I2C-bus change');
+}
 // the relay gained its 3-pin JD-VCC header: older saves had no jumper cap, so fit it (as the guide does)
 if ((saved.wires || []).some(w => w.a === 'relay.VCC' || w.b === 'relay.VCC') && !(saved.wires || []).some(w => [w.a, w.b].some(p => p.startsWith('relay.J')))) {
   saved.wires.push({ a: 'relay.JDVCC', b: 'relay.JVCC', color: '#f2c230' });

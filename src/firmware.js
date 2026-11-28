@@ -378,6 +378,6 @@ export const DEFAULT_SKETCH = buildSketch();
 
 // Fingerprints of every earlier default sketch (all build options). A saved copy that matches one was never
 // edited, so on load it is upgraded to the current default firmware.
-const OLD_DEFAULTS = new Set(['3fcba65d', '89ee4aeb', 'b56b166f', '82efd895', '5259a80c', '7669663a', '4318b447', '42ffbfc5', '2b267f86', '7910d3a0']);
+const OLD_DEFAULTS = new Set(['57865066', '0e126950', '64ef85f5', '2b183941', '3fcba65d', '89ee4aeb', 'b56b166f', '82efd895', '5259a80c', '7669663a', '4318b447', '42ffbfc5', '2b267f86', '7910d3a0']);
 export const sketchHash = s => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return x.toString(16).padStart(8, '0'); };
 export const isOldDefault = code => OLD_DEFAULTS.has(sketchHash(code));
