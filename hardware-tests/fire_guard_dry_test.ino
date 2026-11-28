@@ -96,7 +96,7 @@ const int DHT_ERR_AFTER = 3;   // pump noise spoils the odd read: keep the last 
 
 DHT dht(DHT_PIN, DHT22);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
-Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40, Wire1);  // on its own I2C bus (Wire1), away from the LCD
+Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40, Wire1);  // PCA9685 on Wire1 (GPIO21/22); the LCD has its own bus
 
 float temperature = 28;
 float humidity = 60;
@@ -144,8 +144,8 @@ void setup() {
   tankFullCm = prefs.getFloat("tankFull", TANK_FULL_CM);
 
   dht.begin();
-  Wire.begin(21, 22);
-  Wire1.begin(18, 23);            // second I2C bus, PCA9685 only: SDA 18, SCL 23. The LCD keeps 21/22 to itself
+  Wire.begin(18, 23);             // LCD on its own I2C bus: SDA 18, SCL 23 (away from the PCA9685)
+  Wire1.begin(21, 22);            // PCA9685 servo shield: SDA 21, SCL 22
   Wire.setClock(50000);           // 50 kHz: slower but much less upset by noise from the pumps
   lcd.init();
   lcd.backlight();

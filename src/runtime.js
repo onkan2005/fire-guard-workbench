@@ -256,7 +256,7 @@ function makeApi(rt) {
     A0: 36, A3: 39, A4: 32, A5: 33, A6: 34, A7: 35, ADC_0db: 0, ADC_2_5db: 1, ADC_6db: 2, ADC_11db: 3, WL_CONNECTED: 3, WIFI_STA: 1,
     Serial, DHT, LiquidCrystal_I2C, Adafruit_NeoPixel, Adafruit_PWMServoDriver, Preferences,
     Wire: { _bus: 0, begin(sda, scl) { if (sda != null && scl != null) mcu.i2c = { sda, scl }; }, setClock() { } },
-    Wire1: { _bus: 1, begin(sda, scl) { mcu.i2c1 = { sda: sda ?? 18, scl: scl ?? 23 }; }, setClock() { } },
+    Wire1: { _bus: 1, begin(sda, scl) { mcu.i2c1 = { sda: sda ?? 21, scl: scl ?? 22 }; }, setClock() { } },
     WiFi: { begin() { warnOnce('wifi', '[sim] Wi-Fi is not simulated; pretending to be connected.'); }, status: () => 3, mode() { }, disconnect() { }, localIP: () => '192.168.4.2', RSSI: () => -55 },
     pinMode(p, m) {
       if (!pin(p)) return;
