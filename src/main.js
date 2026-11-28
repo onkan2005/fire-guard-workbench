@@ -11,6 +11,7 @@ import { createEditor } from './editor.js';
 import { DEFAULT_SKETCH, buildSketch, isOldDefault } from './firmware.js';
 import { createShop } from './shop.js';
 import { createCalibration } from './calibrate.js';
+import { createTestPage } from './testpage.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -333,12 +334,18 @@ const shop = createShop({
 const renderParts = () => shop.render();
 const cal = createCalibration({ page: $('calPage'), getOptions: () => options, world, nvs, send: serialSend,
   onSerial: f => serialListeners.push(f), findPart: id => { showPage('bench'); if (parts.has(id) && isActive(parts.get(id))) selectPart(id, true); } });
+const testPage = createTestPage({ page: $('testPage'), getOptions: () => options,
+  loadIntoSimulator: code => {
+    editor.value = buildSketch(options);              // so switching the build doesn't ask about edited code
+    setOption('leds', 'rgb'); setOption('level', 'ultrasonic');
+    editor.value = code; save(); showPage('bench'); run();
+  } });
 function showPage(name) {
-  const shopOn = name === 'shop', calOn = name === 'cal';
-  $('shopPage').hidden = !shopOn; $('calPage').hidden = !calOn; document.querySelector('main.app').hidden = shopOn || calOn;
-  document.body.classList.toggle('page-shop', shopOn); document.body.classList.toggle('page-cal', calOn);
+  const shopOn = name === 'shop', calOn = name === 'cal', testOn = name === 'test';
+  $('shopPage').hidden = !shopOn; $('calPage').hidden = !calOn; $('testPage').hidden = !testOn; document.querySelector('main.app').hidden = shopOn || calOn || testOn;
+  document.body.classList.toggle('page-shop', shopOn); document.body.classList.toggle('page-cal', calOn); document.body.classList.toggle('page-test', testOn);
   document.querySelectorAll('[data-page]').forEach(b => { b.classList.toggle('on', b.dataset.page === name); b.setAttribute('aria-selected', b.dataset.page === name); });
-  if (shopOn) shop.render(); else if (calOn) cal.render(); else S.renderer.domElement.dispatchEvent(new Event('resize'));
+  if (shopOn) shop.render(); else if (calOn) cal.render(); else if (testOn) testPage.render(); else S.renderer.domElement.dispatchEvent(new Event('resize'));
   try { localStorage.setItem('fireguard-page', name); } catch { }
 }
 document.querySelectorAll('[data-page]').forEach(b => b.onclick = () => showPage(b.dataset.page));
@@ -361,7 +368,7 @@ addEventListener('keydown', e => {
   if (e.key === '[') $('toggleLeft').click();
   if (e.key === ']') $('toggleRight').click();
 });
-setTimeout(() => { try { const pg = localStorage.getItem('fireguard-page'); if (pg === 'shop' || pg === 'cal') showPage(pg); } catch { } });
+setTimeout(() => { try { const pg = localStorage.getItem('fireguard-page'); if (pg === 'shop' || pg === 'cal' || pg === 'test') showPage(pg); } catch { } });
 
 // ---------- build options UI ----------
 function renderOptions() {
@@ -862,5 +869,5 @@ window.__fg = {
   get layout() { return layout; }, get layoutBusy() { return !!layoutAnim; }, get encl() { return encl; },
   stepLayout: dt => stepLayout(dt), // lets tests finish the layout animation without waiting for frames
   set testDriving(v) { testDriving = v; },
-  setOption, get options() { return options; }, shop, showPage, selectPart, cal, nvs, serialSend, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
+  setOption, get options() { return options; }, shop, showPage, selectPart, cal, testPage, nvs, serialSend, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
   simulate: async ms => { testDriving = true; while (rt.busy) await new Promise(r => setTimeout(r, 0)); for (let t = 0; t < ms; t += 50) { if (rt.state === 'running') await rt.advance(50, step); else step(0.05); } const o = hw.evaluate(); visuals(o, 0.05, performance.now() / 1000); S.dio.update(world, o, 0.05, performance.now() / 1000); wires.update(performance.now() / 1000, null); S.render(); return o; } };

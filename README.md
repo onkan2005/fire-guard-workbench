@@ -73,7 +73,7 @@ The side panels hide with the **‹ ›** buttons on the edges of the 3D view (o
 The **Calibration** page (top bar) lists every component in your build that needs calibrating or adjusting.
 
 - **Automatic** (the firmware calibrates itself from a Serial Monitor command, 115200 baud, line ending Newline, and saves it in the ESP32's flash with the Preferences library, so it survives power-off and new uploads):
-  - **HC-SR04**: `empty` with the tank empty, `full` with it filled to your full mark (switch the pump battery off first). `dist` shows the distance now.
+  - **HC-SR04**: `empty` with the tank empty, `full` with it filled to your full mark (unplug the battery’s red lead from the 6V+ row first). `dist` shows the distance now.
   - **MQ-2**: `clean` in clean air after warm-up: that reading becomes 0 ppm.
   - **DHT22** (optional): `temp 29.5` with a trusted thermometer's reading saves an offset.
   - `cal` shows the saved values, `reset` goes back to the defaults in the code.

@@ -479,8 +479,8 @@ export const PARTS = [
   },
   {
     // id stays 'psu' so wiring/checks keep working; it is now a 4×AAA battery holder
-    id: 'psu', name: '4×AAA battery holder (6 V, with switch)', short: 'Battery', pos: [215, -80, 0],
-    buy: [1, '4×AAA battery holder with switch + 4 AAA batteries', 'Separate 6 V power for the pumps (fits 3–6 V pumps). Its − (black lead) must also meet the ESP32 GND.', 120, 220],
+    id: 'psu', name: '4×AAA battery holder (6 V)', short: 'Battery', pos: [215, -80, 0],
+    buy: [1, '4×AAA battery holder + 4 AAA batteries', 'Separate 6 V power for the pumps (fits 3–6 V pumps). Its − (black lead) must also meet the ESP32 GND. No switch: unplug the red lead from the 6V+ row to turn the pumps’ power off.', 120, 220],
     info: 'Four 1.5 V AAA cells in series = 6 V. Feeds only the pumps, through the relay contacts. Red lead = +, black lead = −. Never power pumps from ESP32 pins. A 3×AAA holder (4.5 V) also works; the pumps just run slower.',
     pins: [P('VCC', '+ red', -42, -5, { kind: 'lead', y: 5, role: 'supply' }), P('GND', '− black', -42, 5, { kind: 'lead', y: 5, role: 'gnd' })],
     build(p) {
@@ -496,8 +496,6 @@ export const PARTS = [
         const spring = new THREE.Mesh(new THREE.TorusGeometry(3, 0.5, 6, 16), METAL()); spring.position.set(x, 8.2, -up * 25.5); g.add(spring);
       });
       decal(g, 44, 6, c => { txt(c, '4 × AAA · 6 V', 0, 0, 3.2, '#e8edf2', 'center', 800); }, 0, 13.05, -29);
-      box(g, 6, 3, 10, mat('#2a2c30'), 18, 13, 22); box(g, 2.4, 2, 3, mat('#e0e0e0'), 17, 16, 20); // ON/OFF switch
-      decal(g, 10, 4, c => { txt(c, 'ON  OFF', 0, 0, 1.6, '#cfd3d8'); }, 18, 16.05, 26);
       // red/black leads out of the holder, ending in tinned tips you plug into the relay / GND rail
       for (const [z, col] of [[-5, '#d22'], [5, '#1d1d1d']]) {
         const c = new THREE.CatmullRomCurve3([new THREE.Vector3(-23, 6, z * 1.6), new THREE.Vector3(-29, 3, z * 1.3), new THREE.Vector3(-36, 2.2, z), new THREE.Vector3(-41, 2.2, z)]);

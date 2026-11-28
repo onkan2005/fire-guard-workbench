@@ -15,7 +15,7 @@ export class World {
   get flameVisible() { return this.fire && this.hp > 0; }
   get gasPpm() { return Math.round(this.gasLeak + this.smoke); }
   usDistanceMm() { return TANK_FACE_MM - TANK_FULL_MM * this.tank / 100 + (Math.random() - 0.5) * 0.6; }
-  get spraying() { return this.sprPump && this.pumpPower && this.tank > 0.3; } // pumpPower: the pump battery switch
+  get spraying() { return this.sprPump && this.pumpPower && this.tank > 0.3; } // pumpPower: the battery’s red lead is plugged in
   ignite() { this.fire = true; this.hp = 100; this.phase = 'during'; }
   extinguish() { this.fire = false; this.hp = 0; }
   step(dt) {

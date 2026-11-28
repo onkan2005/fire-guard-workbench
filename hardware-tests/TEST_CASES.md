@@ -11,8 +11,8 @@ The tank level is pretended (60 %), and any pump stops after **3 s** so it never
 
 | # | Do this | You should see |
 |---|---|---|
-| 1 | Pump battery switch **OFF**, plug in USB | LCD `Fire Guard DRY TEST`, then `SPR:OFF REF:OFF TEST`, `TANK:60% HALF*`. Relay LEDs off, buzzer quiet. RGB: sprinkler blue, tank blue, fume green |
-| 2 | Battery **ON**. Type `pump1` | Relay 1 clicks, sprinkler pump runs 2 s, then stops |
+| 1 | Battery's **red lead unplugged** from the 6V+ row (no switch), plug in USB | LCD `Fire Guard DRY TEST`, then `SPR:OFF REF:OFF TEST`, `TANK:60% HALF*`. Relay LEDs off, buzzer quiet. RGB: sprinkler blue, tank blue, fume green |
+| 2 | Plug the red lead into 6V+. Type `pump1` | Relay 1 clicks, sprinkler pump runs 2 s, then stops |
 | 3 | Type `pump2` | Relay 2 clicks, refill pump runs 2 s, then stops |
 | 4 | Lighter flame 20–30 cm in front of the flame sensor | Flame sensor's DO LED on, LCD `FIRE`, `FIRE:LOW`, fume LED red, fast beeps, sprinkler relay on, after 3 s `SPR:3s!` and it clicks off |
 | 5 | Take the flame away | About 5 s later `SPR:OFF`, beeping stops, LEDs back to normal |

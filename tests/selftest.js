@@ -502,7 +502,7 @@ void loop() { delay(1000); }
       ok('The calibrated empty level now reads about 0 %', /TANK:[0-2]%/.test(lcd()[1]), lcd()[1]);
       fg.world.tank = 50; await sim(800);
       ok('Half way between reads 50 %', /TANK:(4[89]|5[0-2])%/.test(lcd()[1]), lcd()[1]);
-      ok('Pump battery off: the refill pump can\'t move water', fg.world.tank === 50, fg.world.tank);
+      ok('Battery red lead unplugged: the refill pump can\'t move water', fg.world.tank === 50, fg.world.tank);
       fg.world.pumpPower = true;
       fg.world.gasLeak = 50; await fg.serialSend('clean'); await sim(1800);
       ok('"clean" saves the MQ-2 clean-air voltage', near(sv().mq2Clean, 0.495, 0.08), sv().mq2Clean);
@@ -528,6 +528,19 @@ void loop() { delay(1000); }
     }
 
     if (only.includes('checklist')) {
+      { // Tests page: dry-test sketch + hardware test cases
+        section = 'Tests page'; const wait = ms => new Promise(r => setTimeout(r, ms));
+        fg.showPage('test'); await wait(50);
+        const code = await fg.testPage.getCode();
+        await wait(50);
+        ok('Tests page: shows every test case with a tick box', document.querySelectorAll('#testPage .tcases input[type=checkbox]').length === fg.testPage.cases.length && fg.testPage.cases.length >= 12);
+        ok('Tests page: shows the dry-test sketch', /DRY TEST/.test($('tCode').textContent) && /MAX_PUMP_MS/.test(code));
+        ok('Tests page: lighter tests are marked', document.querySelectorAll('#testPage .tcases .badge').length >= 3);
+        ok('Tests page: 3D controls hidden off the workbench', getComputedStyle(document.querySelector('.top .run')).display === 'none');
+        fg.showPage('bench'); await wait(50);
+        ok('Workbench: 3D controls visible again', getComputedStyle(document.querySelector('.top .run')).display !== 'none');
+      }
+
       section = 'Shopping & photos';
       const prevPage = document.body.classList.contains('page-shop') ? 'shop' : 'bench';
       fg.showPage('shop');

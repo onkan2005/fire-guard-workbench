@@ -212,3 +212,17 @@ table.pins{border-collapse:collapse;width:100%;font-size:11.5px}table.pins td{pa
 .hudtoggle{display:none;align-self:flex-start;font-size:12px;padding:3px 9px}
 @media (max-width:600px){.hudtoggle{display:block}.hud.closed .hudrow:not(.read){display:none}.hud.closed{padding:6px 8px}.hud{gap:4px}}
 @media (max-width:600px){.inspector{width:auto;right:10px;max-height:55%}.top{padding:8px}.views{order:3;width:100%;overflow-x:auto}.hint{display:none}.hudrow label{min-width:110px}}
+/* Tests page */
+.tcodebar{margin:10px 0 6px;align-items:center}
+.tcode{background:#0d1216;border:1px solid var(--ln);border-radius:9px;padding:10px 12px;font:12px/1.45 ui-monospace,Consolas,monospace;max-height:420px;overflow:auto;white-space:pre;color:#d7e3ea;margin:0}
+.ttable{width:100%;border-collapse:collapse;font-size:13px;background:var(--pn2);border:1px solid var(--ln);border-radius:9px;overflow:hidden}
+.ttable td,.ttable th{padding:7px 10px;border-top:1px solid var(--ln);vertical-align:top;text-align:left}
+.ttable th{background:#162029;color:#7cc3df;font-weight:600;border-top:none}
+.ttable code{background:#0d1216;border:1px solid var(--ln);border-radius:4px;padding:0 4px;font-size:12px;white-space:nowrap}
+.tcases td:first-child{width:28px;color:var(--mu)}.tcases td:last-child{width:44px;text-align:center}
+.tcases input{width:18px;height:18px;cursor:pointer}
+.tcases tr.ok td{background:rgba(47,191,91,.10)}
+.tsafe{border-color:#7a4b1e}
+@media (max-width:700px){.tcases td:nth-child(3){font-size:12px}.ttable td,.ttable th{padding:6px}}
+/* the 3D controls only matter on the workbench page */
+body:is(.page-shop,.page-cal,.page-test) .top :is(.layoutsw,.views,.run){display:none}

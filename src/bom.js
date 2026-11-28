@@ -16,7 +16,7 @@ const ITEMS = [
   I('esp32', 'brain', 1, 'ESP32 DevKit (38-pin)', 'The brain.', 0, 0, { owned: true }),
   I('usb', 'brain', 1, 'USB data cable for the ESP32 (micro-USB or USB-C: match your board)', 'Must be a data cable, not charge-only, or uploads fail.', 60, 150),
   I('charger', 'brain', 1, '5 V 2 A USB phone charger', 'Powers the ESP32 and the 5 V rail (~0.7 A total). A laptop USB port (0.5 A) can cause resets.', 150, 300),
-  I('aaaholder', 'brain', 1, '4×AAA battery holder with switch (6 V)', 'Separate power for the pumps, through the relay.', 40, 80),
+  I('aaaholder', 'brain', 1, '4×AAA battery holder (6 V)', 'Separate power for the pumps, through the relay. No switch needed: unplug its red lead from the 6V+ row to cut the pumps.', 40, 80),
   I('aaa', 'brain', 8, 'AAA alkaline batteries (4 + 4 spare)', 'Pumps drain them quickly; keep a spare set for the demo video.', 15, 25),
 
   I('dht22', 'sensors', 1, 'DHT22 (AM2302) temperature & humidity module, 3-pin', 'Room temperature and fire class. Not the DHT11 (too inaccurate, max 50 °C).', 200, 350),
