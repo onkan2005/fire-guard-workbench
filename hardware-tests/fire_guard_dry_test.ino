@@ -8,6 +8,7 @@
 //       heat 30     add 30 C to the temperature reading to test the fire classes (heat 0 = off)
 //       pump1       run the sprinkler pump for 2 s        pump2   run the refill pump for 2 s
 //       status      print the readings now
+//   - If the DHT22 doesn't answer, the LCD shows T:?? DHT22 ERR and the Serial Monitor says what to check.
 //   - The LCD recovers by itself from electrical noise (pump motor, relay clicks): slower I2C, it only
 //     rewrites text that changed, and it re-syncs after every relay click and every 10 s.
 //   - Plus the normal calibration commands: clean, temp 29.5, empty, full, dist, cal, reset.
@@ -70,6 +71,7 @@ bool refLocked = false;
 String lcdShown[4];            // what each LCD row shows now, so only changed text is sent
 unsigned long lastLcdSync = 0; // when the LCD was last re-synced
 int lastRelays = -1;           // relay outputs last time, to re-sync the LCD after a click
+int dhtFails = 0;              // DHT22 reads in a row that gave no answer (NaN)
 
 
 DHT dht(DHT_PIN, DHT22);
@@ -314,6 +316,14 @@ void loop() {
     float h = dht.readHumidity();
     if (!isnan(t)) { rawTemp = t; temperature = t + tempOffset + testHeat; }
     if (!isnan(h)) humidity = h;
+    if (isnan(t) || isnan(h)) {         // DRY TEST: say so, instead of quietly keeping 28 C / 60 %
+      dhtFails++;
+      if (dhtFails == 1 || dhtFails % 5 == 0)
+        Serial.println("TEST: DHT22 gives no reading. Check: GND -> GND rail, VCC -> 3V3 rail, DAT -> GPIO4, and that the pins are not swapped.");
+    } else {
+      if (dhtFails > 0) Serial.println("TEST: DHT22 is answering again.");
+      dhtFails = 0;
+    }
   }
 
   if (now - lastFast < 250) return;
@@ -393,7 +403,8 @@ void loop() {
   String tankName = tankPct <= 5 ? "EMPTY" : tankPct < 35 ? "NEAR EMPTY" : tankPct < 80 ? "HALF" : "FULL";
   lcdLine(0, "SPR:" + String(sprinkler ? (sprLocked ? "3s!" : "ON ") : "OFF") + " REF:" + String(refill ? (refLocked ? "3s!" : "ON ") : "OFF") + " TEST");
   lcdLine(1, "TANK:" + String(tankPct) + "% " + tankName + (fakeTank ? "*" : ""));
-  lcdLine(2, "T:" + String((int)round(temperature)) + "C H:" + String((int)round(humidity)) + "% " + (flame ? "FIRE" : gas ? "GAS" : "OK"));
+  String th = dhtFails > 0 ? "T:?? DHT22 ERR" : "T:" + String((int)round(temperature)) + "C H:" + String((int)round(humidity)) + "%";
+  lcdLine(2, th + " " + (flame ? "FIRE" : gas ? "GAS" : "OK"));
   lcdLine(3, "FIRE:" + classNames[cls]);
 
   if (now - lastLog >= 2000) {
