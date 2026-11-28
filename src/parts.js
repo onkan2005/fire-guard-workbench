@@ -149,8 +149,8 @@ export const PARTS = [
     // Assembled: on the back wall of the house, face into the room (rot x 90° stands the board up)
     assembled: { pos: [88, 58, -365.5], rot: [Math.PI / 2, 0, 0], where: 'back wall of the house under a drip shield, away from the spray' },
     buy: [1, 'DHT22 (AM2302) 3-pin module', 'Temperature/humidity. Reads up to 80 °C, so test with warm air, not a flame. The DHT11 is too inaccurate.', 200, 350],
-    info: 'Digital one-wire sensor. The module has its own pull-up resistor. Power it from 3V3 so DATA stays at a safe 3.3 V.',
-    pins: [P('VCC', '+', 12.5, -2.54, { role: 'vcc' }), P('DATA', 'OUT', 12.5, 0, { role: 'out-digital' }), P('GND', '−', 12.5, 2.54, { role: 'gnd' })],
+    info: 'Digital one-wire sensor. The module has its own pull-up resistor. Power it from 3V3 so DATA stays at a safe 3.3 V. Pins on this module: GND, VCC, DAT. Other DHT22 modules use a different order (+ OUT −), so always follow the labels printed on yours.',
+    pins: [P('GND', 'GND', 12.5, -2.54, { role: 'gnd' }), P('VCC', 'VCC', 12.5, 0, { role: 'vcc' }), P('DATA', 'DAT', 12.5, 2.54, { role: 'out-digital' })],
     build(p) {
       const g = p.inner;
       pcb(g, 30, 24, '#1f5fa8', c => { hdrLabels(c, p.def.pins, -2.4); txt(c, 'DHT22', 0, 10, 2); });

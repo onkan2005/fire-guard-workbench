@@ -12,7 +12,7 @@ function rgbPanelStep(drv, board, note) {
 export const GUIDE = [
   { title: 'Power rails', part: 'rail', why: 'Bring 3.3 V, 5 V and GND from the ESP32 to the breadboard rails so every module can share them. A pin only ever takes one jumper: when several pins share a signal, they meet in a breadboard row.',
     wires: [['esp.3V3', 'rail.3V3_0', '#f08a24'], ['esp.5V', 'rail.5V_0', '#e5392f'], ['esp.GND1', 'rail.GND_0', '#222428']] },
-  { title: 'DHT22 temperature sensor', part: 'dht', why: 'Powered from 3V3 so its DATA line never goes above 3.3 V. DATA → GPIO4.',
+  { title: 'DHT22 temperature sensor', part: 'dht', why: 'Powered from 3V3 so its DATA line never goes above 3.3 V. Pins on the module: GND → GND rail, VCC → 3V3 rail, DAT → GPIO4.',
     wires: [['dht.VCC', 'rail.3V3_1', '#f08a24'], ['dht.GND', 'rail.GND_1', '#222428'], ['dht.DATA', 'esp.4', '#2fbf5b']] },
   { title: 'MQ-2 gas sensor + divider', part: 'mq2', why: 'The heater needs 5 V. AO goes through the 10k/20k divider so GPIO34 sees at most ~2.8 V.',
     wires: [['mq2.VCC', 'rail.5V_1', '#e5392f'], ['mq2.GND', 'rail.GND_2', '#222428'], ['mq2.AO', 'div.IN', '#b06ee0'], ['div.OUT', 'esp.34', '#b06ee0'], ['div.GND', 'rail.GND_3', '#222428']] },
