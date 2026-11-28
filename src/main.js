@@ -199,6 +199,12 @@ function addWire(a, b, color, quiet) {
 function removeWire(id) { hw.wires = hw.wires.filter(w => w.id !== id); wires.remove(id); selWire(null); changed(); }
 function changed() { hw.rebuild(); renderGuide(); renderChecks(); save(); if (typeof tracedWire !== 'undefined' && tracedWire) traceWire(tracedWire); else if (typeof tracedPin !== 'undefined' && tracedPin) traceNet(tracedPin); }
 const pinInBuild = id => { const p = parts.get(id.split('.')[0]); return p && isActive(p); };
+// the buzzer used to be a 3-pin module (VCC/SIG/GND); it is now a bare 2-pin buzzer: swap its old jumpers for the new ones
+if ((saved.wires || []).some(w => /^buzz\.(VCC|SIG|GND)$/.test(w.a) || /^buzz\.(VCC|SIG|GND)$/.test(w.b))) {
+  saved.wires = saved.wires.filter(w => !/^buzz\./.test(w.a) && !/^buzz\./.test(w.b));
+  const st = GUIDE.find(x => x.part === 'buzz'); if (st) saved.wires.push(...st.wires.map(([a, b, color]) => ({ a, b, color })));
+  migrated.push('the buzzer is now a 2-pin buzzer, so its jumpers were changed to long leg → GPIO19 and short leg → GND');
+}
 for (const w of saved.wires || []) if (pinInBuild(w.a) && pinInBuild(w.b)) addWire(w.a, w.b, w.color, true);
 hw.rebuild();
 
