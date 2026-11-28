@@ -109,11 +109,12 @@ export function createTestPage({ page, getOptions, loadIntoSimulator }) {
       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([await getCode()], { type: 'text/plain' }));
       a.download = 'fire_guard_dry_test.ino'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     }
-    if (id === 'tTry') {
-      if (!confirm('Load the dry-test sketch into the simulator and run it?\n\nYour code in the editor is replaced. “Restore default” brings the normal firmware back.')) return;
-      loadIntoSimulator(await getCode());
-    }
+    if (id === 'tTry') tryInSimulator();
   });
+  async function tryInSimulator() {
+    if (!confirm('Load the dry-test sketch into the simulator and run it?\n\nYour code in the editor is replaced. “Restore default” brings the normal firmware back.')) return;
+    loadIntoSimulator(await getCode());
+  }
 
-  return { render, cases: CASES, getCode };
+  return { render, cases: CASES, getCode, tryInSimulator };
 }

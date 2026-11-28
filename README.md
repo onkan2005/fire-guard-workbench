@@ -81,6 +81,19 @@ The **Calibration** page (top bar) lists every component in your build that need
 
 Each automatic card can also be tried on the simulated board, and the Serial tab has an input box for the same commands.
 
+## Real-world faults & fixes
+
+In the **Build guide** tab, open **Real-world faults & fixes** to switch on problems found on the real build and see what they do:
+pump red on **NC** instead of NO, battery black or red lead unplugged, a **5 V relay board that stays on** with the ESP32's 3.3 V HIGH,
+the relay trigger jumper on **H**, and **pump motor noise** that garbles the I2C LCD, plus the fix: **1N4007 diodes** across the pumps.
+The wiring ones move the real jumpers. **Load the dry-test code** runs the sketch from the Tests page, which releases the relay pins
+for OFF and re-syncs the LCD.
+
+## Tests page
+
+The **Tests** page (top bar) has the dry-test sketch (pretend tank level, pumps stop after 3 s, Serial commands) with Copy / Download /
+Try in the simulator, and the step-by-step hardware test cases with tick boxes.
+
 ## Keeping the sensors dry
 
 In the Assembled layout the sprinkler sprays a narrow cone straight down over the fire. The DHT22 and MQ-2 sit high

@@ -27,6 +27,8 @@ export class Hardware {
   }
   resetMCU() {
     this.mcu = { mode: {}, level: {}, i2c: { sda: 21, scl: 22 } };
+    // real-world quirks you can switch on to see them (Build guide → Real-world faults & fixes)
+    this.faults = { relay5v: false, trigH: false, noise: false, diodes: false };
     this.lcd = { rows: [' '.repeat(20), ' '.repeat(20), ' '.repeat(20), ' '.repeat(20)], init: false, backlight: false, cx: 0, cy: 0 };
     this.pixels = new Array(8).fill(0);
     this.sr = { shift: new Array(24).fill(0), out: new Array(24).fill(0) }; // three chained 74HC595
@@ -82,7 +84,11 @@ export class Hardware {
   evaluate() {
     const o = {}, w = this.world;
     const rv = this.vcc('relay'); o.relayPowered = rv >= 4.5; o.relayWeak = rv > 0 && rv < 4.5;
-    for (const k of [1, 2]) { const v = this.netV('relay.IN' + k); o['k' + k] = o.relayPowered && v != null && v < 1.2; }
+    const f = this.faults;
+    // IN floating (pin released) = off: the board's own resistor pulls it to its idle level.
+    // L trigger: LOW = on. A 5 V board that needs ~5 V to switch off also stays on at the ESP32's 3.3 V HIGH.
+    // H trigger: HIGH = on.
+    for (const k of [1, 2]) { const v = this.netV('relay.IN' + k); o['k' + k] = o.relayPowered && v != null && (f.trigH ? v > 2 : v < (f.relay5v ? 4 : 1.2)); }
     const links = this.links();
     links.push(o.k1 ? ['relay.COM1', 'relay.NO1'] : ['relay.COM1', 'relay.NC1']);
     links.push(o.k2 ? ['relay.COM2', 'relay.NO2'] : ['relay.COM2', 'relay.NC2']);
@@ -94,6 +100,11 @@ export class Hardware {
       return false;
     };
     o.sprPump = pump('pumpS'); o.refPump = pump('pumpR');
+    // pump motor noise without flyback diodes: knocks the I2C LCD out of step (garbled until lcd.init())
+    const noisy = f.noise && !f.diodes, kk = (o.k1 ? 1 : 0) + (o.k2 ? 2 : 0);
+    this.motorNoise = noisy && (o.sprPump || o.refPump);
+    if (noisy && this._kk !== undefined && kk !== this._kk && this.lcd.init) this.lcd.desync = true; // relay click spike
+    this._kk = kk;
     o.buzz = this.isGround('buzz.N') && (this.netV('buzz.P') ?? 0) > 1.5;
     const lg = this.isGround('panel.GND');
     o.leds = []; o.ledDim = [];

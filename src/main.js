@@ -198,7 +198,7 @@ function addWire(a, b, color, quiet) {
   if (!quiet) changed();
 }
 function removeWire(id) { hw.wires = hw.wires.filter(w => w.id !== id); wires.remove(id); selWire(null); changed(); }
-function changed() { hw.rebuild(); renderGuide(); renderChecks(); save(); if (typeof tracedWire !== 'undefined' && tracedWire) traceWire(tracedWire); else if (typeof tracedPin !== 'undefined' && tracedPin) traceNet(tracedPin); }
+function changed() { hw.rebuild(); renderGuide(); renderChecks(); if (typeof renderFaults === 'function' && $('faults').innerHTML) renderFaults(); save(); if (typeof tracedWire !== 'undefined' && tracedWire) traceWire(tracedWire); else if (typeof tracedPin !== 'undefined' && tracedPin) traceNet(tracedPin); }
 const pinInBuild = id => { const p = parts.get(id.split('.')[0]); return p && isActive(p); };
 // the buzzer used to be a 3-pin module (VCC/SIG/GND); it is now a bare 2-pin buzzer: swap its old jumpers for the new ones
 if ((saved.wires || []).some(w => /^buzz\.(VCC|SIG|GND)$/.test(w.a) || /^buzz\.(VCC|SIG|GND)$/.test(w.b))) {
@@ -393,6 +393,63 @@ function setOption(key, val) {
 }
 $('opts').addEventListener('click', e => { const b = e.target.closest('[data-opt]'); if (b) setOption(b.dataset.opt, b.dataset.val); });
 renderOptions(); renderParts();
+
+// ---------- real-world faults & fixes (toggleable) ----------
+// Wiring ones change the actual jumpers (so they show in 3D and stay in sync with hand wiring);
+// board ones change how the relay board / pump noise behave in hw.evaluate() and the LCD.
+const FAULTS_KEY = 'fireguard-faults';
+try { Object.assign(hw.faults, JSON.parse(localStorage.getItem(FAULTS_KEY) || '{}')); } catch { }
+const hasWire = (a, b) => hw.wires.find(w => (w.a === a && w.b === b) || (w.a === b && w.b === a));
+const FAULT_WIRES = [
+  { id: 'ncS', label: 'Sprinkler pump red on <b>NC</b> instead of NO', see: 'Pump runs whenever the relay is off, even with the ESP32 unplugged.', bad: ['relay.NC1', 'pumpS.P'], good: ['relay.NO1', 'pumpS.P'], color: '#e5392f' },
+  { id: 'ncR', label: 'Refill pump red on <b>NC</b> instead of NO', see: 'Same for the refill pump.', bad: ['relay.NC2', 'pumpR.P'], good: ['relay.NO2', 'pumpR.P'], color: '#e5392f' },
+  { id: 'batN', label: 'Battery black (−) lead unplugged', see: 'The pump circuit is open: no pump can run, whatever the relay does.', good: ['psu.GND', 'rail.BATN_0'], color: '#222428' },
+  { id: 'batP', label: 'Battery red (+) lead unplugged', see: 'Same: the safe way to cut pump power (the holder has no switch).', good: ['psu.VCC', 'rail.BATP_0'], color: '#e5392f' },
+];
+const FAULT_BOARD = [
+  { id: 'relay5v', label: '5 V relay board needs ~5 V on IN to switch <b>off</b>', see: 'The ESP32’s 3.3 V HIGH leaves the relay ON, so the pump runs all the time. Fix in code: release the pin for OFF (the dry-test sketch on the Tests page does this).' },
+  { id: 'trigH', label: 'Relay trigger jumper on <b>H</b> instead of L', see: 'HIGH = on, so the normal code runs the pumps at idle and switches them off on a fire. Move the jumper to L.' },
+  { id: 'noise', label: 'Pump motor noise reaches the LCD', see: 'While a pump runs (or a relay clicks) the LCD text gets garbled until the LCD is re-initialised. The dry-test sketch re-syncs it.' },
+];
+const FAULT_FIX = [
+  { id: 'diodes', label: '1N4007 diode across each pump (stripe to red)', see: 'Soaks up the motor’s voltage spikes: the noise above no longer garbles the LCD.' },
+];
+const faultWireOn = f => f.bad ? !!hasWire(...f.bad) : !hasWire(...f.good);
+function setFaultWire(f, on) {
+  const rm = on ? f.good : f.bad, add = on ? f.bad : f.good;
+  if (rm) { const w = hasWire(...rm); if (w) { hw.wires = hw.wires.filter(x => x !== w); wires.remove(w.id); } }
+  if (add) addWire(add[0], add[1], f.color, true);
+  changed();
+}
+function renderFaults() {
+  const el = $('faults'), open = el.open;
+  const n = FAULT_WIRES.filter(faultWireOn).length + FAULT_BOARD.filter(f => hw.faults[f.id]).length;
+  const row = (f, on, kind) => `<label class="frow${on ? ' on' : ''}"><input type="checkbox" data-fault="${kind}:${f.id}" ${on ? 'checked' : ''}><span>${f.label}<small>${f.see}</small></span></label>`;
+  el.innerHTML = `<summary><b>Real-world faults &amp; fixes</b> <span class="mu small">${n ? n + ' fault' + (n > 1 ? 's' : '') + ' on' : 'all off'}${hw.faults.diodes ? ' · diodes fitted' : ''}</span></summary>
+    <p class="mu small">Switch on the problems found on the real build to see what they do. Run the sketch, then plug things in, light a fire, or type pump1 in the Serial tab.</p>
+    <h5>Wiring</h5>${FAULT_WIRES.map(f => row(f, faultWireOn(f), 'w')).join('')}
+    <h5>Relay board &amp; noise</h5>${FAULT_BOARD.map(f => row(f, !!hw.faults[f.id], 'b')).join('')}
+    <h5>Fixes</h5>${FAULT_FIX.map(f => row(f, !!hw.faults[f.id], 'b')).join('')}
+    <div class="row wrap"><button class="sm" id="faultDry">Load the dry-test code (has the code fixes)</button><button class="sm" id="faultReset">All off</button></div>`;
+  el.open = open;
+}
+$('faults').addEventListener('change', e => {
+  const k = e.target.dataset.fault; if (!k) return;
+  const [kind, id] = k.split(':');
+  if (kind === 'w') setFaultWire(FAULT_WIRES.find(f => f.id === id), e.target.checked);
+  else { hw.faults[id] = e.target.checked; if (id === 'diodes' || id === 'noise') hw.lcd.desync = false; try { localStorage.setItem(FAULTS_KEY, JSON.stringify(hw.faults)); } catch { } }
+  renderFaults();
+});
+$('faults').addEventListener('click', async e => {
+  if (e.target.id === 'faultReset') {
+    for (const f of FAULT_WIRES) if (faultWireOn(f)) setFaultWire(f, false);
+    for (const f of [...FAULT_BOARD, ...FAULT_FIX]) hw.faults[f.id] = false;
+    hw.lcd.desync = false; try { localStorage.setItem(FAULTS_KEY, JSON.stringify(hw.faults)); } catch { }
+    renderFaults();
+  }
+  if (e.target.id === 'faultDry') testPage.tryInSimulator();
+});
+renderFaults();
 
 // ---------- checks ----------
 function renderChecks() {
@@ -869,5 +926,5 @@ window.__fg = {
   get layout() { return layout; }, get layoutBusy() { return !!layoutAnim; }, get encl() { return encl; },
   stepLayout: dt => stepLayout(dt), // lets tests finish the layout animation without waiting for frames
   set testDriving(v) { testDriving = v; },
-  setOption, get options() { return options; }, shop, showPage, selectPart, cal, testPage, nvs, serialSend, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
+  setOption, get options() { return options; }, shop, showPage, selectPart, cal, testPage, renderFaults, nvs, serialSend, get panels() { return panels; }, // a self-test sets this so the animation loop stops advancing time on its own
   simulate: async ms => { testDriving = true; while (rt.busy) await new Promise(r => setTimeout(r, 0)); for (let t = 0; t < ms; t += 50) { if (rt.state === 'running') await rt.advance(50, step); else step(0.05); } const o = hw.evaluate(); visuals(o, 0.05, performance.now() / 1000); S.dio.update(world, o, 0.05, performance.now() / 1000); wires.update(performance.now() / 1000, null); S.render(); return o; } };

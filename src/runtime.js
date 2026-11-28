@@ -166,6 +166,7 @@ function makeApi(rt) {
     computeHeatIndex(t) { return t; }
   }
 
+  const GARBLE = '▒#%&@$¥§¶ÞßøЖЯ±¤¿ÆΩ';
   class LiquidCrystal_I2C {
     constructor(addr = 0x27, cols = 16, rows = 2) { this.addr = addr; this.cols = cols; this.rowsN = rows; }
     _link() {
@@ -174,7 +175,7 @@ function makeApi(rt) {
       if (!ok) warnOnce('lcd', `[sim] I2C: nothing answered at 0x${this.addr.toString(16).toUpperCase()} on SDA=GPIO${sda}, SCL=GPIO${scl}.` + (this.addr !== 0x27 ? ' This LCD backpack is at 0x27.' : ' Check the LCD wires and power.'));
       return ok;
     }
-    init() { if (this._link()) { hw.lcd.init = true; this.clear(); } }
+    init() { if (this._link()) { hw.lcd.init = true; hw.lcd.desync = false; this.clear(); } }
     begin() { this.init(); }
     backlight() { if (this._link()) hw.lcd.backlight = true; }
     noBacklight() { if (this._link()) hw.lcd.backlight = false; }
@@ -185,7 +186,10 @@ function makeApi(rt) {
       const s = fmtNum(v, f);
       if (!this._link() || !hw.lcd.init) return s.length;
       const L = hw.lcd;
-      for (const ch of s) {
+      for (let ch of s) {
+        // electrical noise from the pumps (no diodes): once a nibble is lost every character comes out wrong
+        if (!L.desync && hw.motorNoise && Math.random() < 0.04) L.desync = true;
+        if (L.desync) ch = GARBLE[(ch.charCodeAt(0) * 7 + L.cx * 3 + L.cy) % GARBLE.length];
         if (L.cy >= 0 && L.cy < 4 && L.cx >= 0 && L.cx < 20) L.rows[L.cy] = L.rows[L.cy].slice(0, L.cx) + ch + L.rows[L.cy].slice(L.cx + 1);
         L.cx++;
         if (L.cx >= 20) { L.cx = 0; L.cy = { 0: 2, 2: 1, 1: 3, 3: 0 }[L.cy] ?? 0; } // HD44780 line order

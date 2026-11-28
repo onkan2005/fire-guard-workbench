@@ -9,7 +9,7 @@ import { bomFor } from '../src/bom.js';
 import { DEFAULT_SKETCH } from '../src/firmware.js';
 
 const KEY = 'fireguard-workbench-v1';
-export const SECTIONS = ['boot', 'wiring', 'firmware', 'scenarios', 'hcsr04', 'leds', 'miswiring', 'compiler', 'runtime', 'layout', 'reset', 'inspect', 'trace', 'datalog', 'options', 'calibration', 'checklist', 'persistence'];
+export const SECTIONS = ['boot', 'wiring', 'firmware', 'scenarios', 'hcsr04', 'leds', 'miswiring', 'compiler', 'runtime', 'layout', 'reset', 'inspect', 'trace', 'datalog', 'options', 'faults', 'calibration', 'checklist', 'persistence'];
 
 export async function run(only = SECTIONS) {
   const fg = window.__fg; if (!fg) throw new Error('Open the workbench page first');
@@ -527,6 +527,37 @@ void loop() { delay(1000); }
       fg.rt.stop(); fg.nvs.clear();
     }
 
+    if (only.includes('faults')) {
+      section = 'Real-world faults';
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      const tog = async (k, on) => { const el = document.querySelector(`[data-fault="${k}"]`); if (el.checked !== on) { el.checked = on; el.dispatchEvent(new Event('change', { bubbles: true })); } await wait(20); };
+      wireAll(); fg.world.reset(); fg.editor.value = DEFAULT_SKETCH; await fg.run(); await fg.simulate(3000);
+      const o = () => fg.hw.evaluate();
+      ok('Faults panel lists wiring, relay-board and fix toggles', document.querySelectorAll('#faults [data-fault]').length >= 8);
+      ok('All off: pumps idle', !o().sprPump && !o().refPump);
+      await tog('w:ncS', true);
+      ok('Pump red on NC: the jumper really moves to NC1', !!fg.hw.wires.find(w => [w.a, w.b].includes('relay.NC1') && [w.a, w.b].includes('pumpS.P')));
+      ok('Pump red on NC: sprinkler pump runs with no fire', o().sprPump);
+      await tog('w:ncS', false);
+      ok('Back on NO: pump idle again', !o().sprPump);
+      await tog('b:relay5v', true); await fg.simulate(500);
+      ok('5 V relay board + normal code: 3.3 V HIGH leaves both pumps on', o().sprPump && o().refPump);
+      await tog('w:batN', true);
+      ok('Battery − unplugged: no pump can run', !o().sprPump && !o().refPump);
+      await tog('w:batN', false); await tog('w:batP', true);
+      ok('Battery + unplugged: no pump can run', !o().sprPump && !o().refPump);
+      await tog('w:batP', false); await tog('b:relay5v', false);
+      await tog('b:trigH', true); await fg.simulate(500);
+      ok('Trigger jumper on H: normal code runs the pumps at idle', o().sprPump);
+      await tog('b:trigH', false);
+      await tog('b:noise', true); fg.world.ignite(); await fg.simulate(3000);
+      ok('Pump noise without diodes garbles the LCD', o().sprPump && !/SPR/.test(fg.hw.lcd.rows.join('')), fg.hw.lcd.rows[0]);
+      await tog('b:diodes', true); fg.rt.stop(); await wait(100); await fg.run(); await fg.simulate(3000);
+      ok('Diodes fitted: LCD stays readable while the pump runs', o().sprPump && /SPR:ON/.test(fg.hw.lcd.rows[0]), fg.hw.lcd.rows[0]);
+      document.getElementById('faultReset').click(); await wait(50);
+      ok('All off resets every fault', Object.values(fg.hw.faults).every(v => !v) && /all off/.test(document.querySelector('#faults summary').textContent));
+      fg.rt.stop(); fg.world.reset();
+    }
     if (only.includes('checklist')) {
       { // Tests page: dry-test sketch + hardware test cases
         section = 'Tests page'; const wait = ms => new Promise(r => setTimeout(r, ms));
