@@ -18,7 +18,7 @@ const CASES = [
   ['Battery’s <b>red lead unplugged</b> from the 6V+ row (the holder has no switch), plug in USB.', 'LCD shows <code>Fire Guard DRY TEST</code>, then <code>SPR:OFF REF:OFF TEST</code> and <code>TANK:60% HALF*</code>. Relay LEDs off, buzzer quiet. RGB: sprinkler blue, tank blue, fume green.'],
   ['Plug the battery’s red lead into the 6V+ row. Type <code>pump1</code>.', 'Relay 1 clicks, the sprinkler pump runs 2 s, then stops.'],
   ['Type <code>pump2</code>.', 'Relay 2 clicks, the refill pump runs 2 s, then stops.'],
-  ['Lighter flame <b>20–30 cm</b> in front of the flame sensor.', 'Flame sensor DO LED on, LCD <code>FIRE</code> and <code>FIRE:LOW</code>, fume LED red, fast beeps. Sprinkler relay on, then after 3 s <code>SPR:3s!</code> and it clicks off.', true],
+  ['Lighter flame <b>20–30 cm</b> in front of the flame sensor.', 'Flame sensor DO LED on, LCD <code>FIRE</code> and <code>FIRE:LOW</code>, fume LED red, fast beeps. <b>Sprinkler pump runs 3 s</b> while the pretend tank drops 60 → 30 %, then <code>SPR:3s!</code>. Then the <b>refill pump runs about 3 s</b> (<code>REF:ON</code>, tank climbs back to 95 %) and stops.', true],
   ['Take the flame away.', 'About 5 s later <code>SPR:OFF</code>, the beeping stops, LEDs back to normal.', true],
   ['Let the MQ-2 warm up 3 min and type <code>clean</code>. Then press the lighter’s gas button <b>without sparking</b>, 2–3 cm from the MQ-2, for 2 s.', 'Gas rises above 300 ppm: LCD <code>GAS</code>, fume LED orange, slow beeps, <b>no</b> sprinkler. Clears after about 30 s.', true],
   ['Type <code>heat 10</code>, <code>heat 20</code>, <code>heat 30</code>, <code>heat 40</code>, <code>heat 50</code>, waiting 3 s between.', 'Fire class LED: green (LOW) → blue (MODERATE) → yellow (HIGH) → orange (VERY HIGH) → red (EXTREME). LCD <code>FIRE:</code> follows. The sprinkler runs 3 s when it starts.'],
@@ -60,7 +60,7 @@ export function createTestPage({ page, getOptions, loadIntoSimulator }) {
 
       <h2>1. Upload the dry-test sketch</h2>
       <div class="notes">
-        <p>Same as the normal Fire Guard sketch, plus: the tank level is <b>pretended</b> (starts at 60 %), and any pump stops after <b>3 s</b> so it never runs dry for long (<code>3s!</code> on the LCD). When the container is ready, go back to the normal sketch.</p>
+        <p>Same as the normal Fire Guard sketch, plus: the tank level is <b>pretended</b> (starts at 60 %, drains while spraying and fills while refilling, so a fire runs sprinkler 3 s → refill 3 s), and any pump stops after <b>3 s</b> so it never runs dry for long (<code>3s!</code> on the LCD). When the container is ready, go back to the normal sketch.</p>
         <p>For the build with <b>5 RGB LEDs + PCA9685</b> and the <b>HC-SR04</b>.${match ? '' : ' <b>Your simulator is set to a different build</b>, so “Try it in the simulator” switches it to RGB LEDs + HC-SR04.'}</p>
       </div>
       <div class="row wrap tcodebar">

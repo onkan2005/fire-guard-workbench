@@ -14,7 +14,7 @@ The tank level is pretended (60 %), and any pump stops after **3 s** so it never
 | 1 | Battery's **red lead unplugged** from the 6V+ row (no switch), plug in USB | LCD `Fire Guard DRY TEST`, then `SPR:OFF REF:OFF TEST`, `TANK:60% HALF*`. Relay LEDs off, buzzer quiet. RGB: sprinkler blue, tank blue, fume green |
 | 2 | Plug the red lead into 6V+. Type `pump1` | Relay 1 clicks, sprinkler pump runs 2 s, then stops |
 | 3 | Type `pump2` | Relay 2 clicks, refill pump runs 2 s, then stops |
-| 4 | Lighter flame 20–30 cm in front of the flame sensor | Flame sensor's DO LED on, LCD `FIRE`, `FIRE:LOW`, fume LED red, fast beeps, sprinkler relay on, after 3 s `SPR:3s!` and it clicks off |
+| 4 | Lighter flame 20–30 cm in front of the flame sensor | Flame sensor's DO LED on, LCD `FIRE`, `FIRE:LOW`, fume LED red, fast beeps, sprinkler pump runs 3 s (pretend tank 60 → 30 %), `SPR:3s!`, then the refill pump runs about 3 s (tank back to 95 %) and stops |
 | 5 | Take the flame away | About 5 s later `SPR:OFF`, beeping stops, LEDs back to normal |
 | 6 | Let the MQ-2 warm up 3 min. Type `clean`. Then press the lighter's gas button **without** sparking, 2–3 cm from the MQ-2 for 2 s | gas ppm rises above 300: LCD `GAS`, fume LED orange, slow beeps, **no** sprinkler. Clears after about 30 s |
 | 7 | Type `heat 10`, `heat 20`, `heat 30`, `heat 40`, `heat 50` (wait 3 s between) | Fire class LED: green (LOW), blue (MODERATE), yellow (HIGH), orange (VERY HIGH), red (EXTREME). LCD `FIRE:` follows. Sprinkler runs 3 s each time it starts |

@@ -1,6 +1,7 @@
 // Fire Guard: DRY TEST version, for testing everything before the water container is ready.
 // Same as the normal sketch, plus:
 //   - The tank level is pretended (no container yet), so the refill pump no longer starts on its own.
+//     The pretend water moves: every fire sprays 3 s (tank down to 30 %), then the refill pump runs about 3 s (-> 95 %).
 //   - A pump may run at most 3 s at a time (pumps must not run dry for long), then it is locked out.
 //   - Serial Monitor commands (115200 baud, line ending "Newline"):
 //       tank 60     pretend the tank is 60 % full (20 starts the refill, 100 ends it, 0 = empty)
@@ -76,6 +77,10 @@ const float TANK_FULL_CM  = 2.0;  // ...and full. Calibrate yours: type empty / 
 // ---- DRY TEST settings ----
 bool fakeTank = true;          // true: pretend the tank level below. Type "real" to use the HC-SR04
 int fakeTankPct = 60;          // 60 % = no refill, and the sprinkler is allowed. Change with: tank 20
+float fakeTankF = 60;          // the pretended level with decimals: it drains while spraying and fills while refilling
+float sprayStep = 2.5;         // % per 250 ms while spraying: set when a spray starts so 3 s always ends at 30 % (the refill level)
+bool wasPumping = false;       // the sprinkler pump was running on the last loop
+const float REFILL_FILL = 5.5; // % per 250 ms: about 3 s of refilling takes it from 30 % back to 95 %
 float testHeat = 0;            // added to the temperature, for testing fire classes. Change with: heat 30
 const unsigned long MAX_PUMP_MS = 3000;  // longest a pump may run without water
 unsigned long sprPumpStart = 0;
@@ -231,6 +236,7 @@ void handleSerial() {
   if (cmd.indexOf("tank") >= 0) {
     fakeTank = true;
     fakeTankPct = constrain(cmd.substring(cmd.indexOf(' ') + 1).toInt(), 0, 100);
+    fakeTankF = fakeTankPct;
     Serial.printf("TEST: pretending the tank is %d%% full\n", fakeTankPct);
     return;
   }
@@ -377,6 +383,16 @@ void loop() {
   }
   relayWrite(RELAY_SPR, sprinkler && !sprLocked);
   relayWrite(RELAY_REF, refill && !refLocked);
+  // DRY TEST: pretend the water moves, so one fire runs the whole cycle with the real logic:
+  // sprinkler 3 s (tank 60 -> 30 %), then the refill starts at 30 % and runs about 3 s (-> 95 %), then stops.
+  if (fakeTank) {
+    bool pumping = sprinkler && !sprLocked;
+    if (pumping && !wasPumping) sprayStep = max(0.0, (fakeTankF - REFILL_START) / (MAX_PUMP_MS / 250.0));
+    wasPumping = pumping;
+    if (pumping) fakeTankF = constrain(fakeTankF - sprayStep, 0, 100);
+    if (refill && !refLocked) fakeTankF = constrain(fakeTankF + REFILL_FILL, 0, 100);
+    fakeTankPct = (int)fakeTankF;
+  }
   int relays = (sprinkler && !sprLocked ? 1 : 0) + (refill && !refLocked ? 2 : 0);
   if (relays != lastRelays) {           // a relay just clicked: give the spike a moment, then re-sync the LCD
     lastRelays = relays;
