@@ -37,7 +37,7 @@ const ITEMS = [
   I('rgbled', 'outputs', 6, 'RGB LED 5 mm, common CATHODE (4 legs), 5 + 1 spare', 'One per indicator. Common anode will NOT work with this wiring.', 8, 15, { opt: ['leds', 'rgb'] }),
 
   I('r_mq', 'passives', 1, '10 kΩ + 20 kΩ resistor (one of each)', 'MQ-2 divider: keeps GPIO34 under 3.3 V.', 2, 5),
-  I('r_echo', 'passives', 1, '1 kΩ + 2 kΩ resistor (one of each)', 'HC-SR04 ECHO divider: 5 V → 3.3 V.', 2, 5, { opt: ['level', 'ultrasonic'] }),
+  I('r_echo', 'passives', 3, '1 kΩ resistor (brown-black-red-gold)', 'HC-SR04 ECHO divider: one on top, two in series below (= 2 kΩ), 5 V → 3.3 V.', 1, 2, { opt: ['level', 'ultrasonic'] }),
   I('r_led', 'passives', 17, '330 Ω resistor', 'One per LED (~9 mA). 220 Ω pulls too much current from a 74HC595.', 1, 2, { opt: ['leds', 'single'] }),
   I('r_pull', 'passives', 4, '470 kΩ resistor', 'Probe pull-ups: tap water easily pulls these LOW.', 1, 2, { opt: ['level', 'probes'] }),
   I('c100n', 'passives', 4, '100 nF (0.1 µF, code “104”) ceramic capacitor', 'Decoupling: one between VCC and GND right at each 74HC595 (+1 spare). Stops random flicker.', 1, 3, { opt: ['leds', 'single'] }),

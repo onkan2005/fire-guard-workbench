@@ -18,7 +18,7 @@ export const GUIDE = [
     wires: [['mq2.VCC', 'rail.5V_1', '#e5392f'], ['mq2.GND', 'rail.GND_2', '#222428'], ['mq2.AO', 'div.IN', '#b06ee0'], ['div.OUT', 'esp.34', '#b06ee0'], ['div.GND', 'rail.GND_3', '#222428']] },
   { title: 'IR flame sensor', part: 'flame', why: 'Powered from 3V3. DO goes LOW when a flame is seen. DO → GPIO27.',
     wires: [['flame.VCC', 'rail.3V3_2', '#f08a24'], ['flame.GND', 'rail.GND_4', '#222428'], ['flame.DO', 'esp.27', '#f2c230']] },
-  { title: 'Tank level: HC-SR04 ultrasonic', part: 'us', option: ['level', 'ultrasonic'], why: 'Looks down at the water from above the tank. Needs 5 V. TRIG → GPIO25. ECHO outputs 5 V, so it goes through the 1k/2k divider to GPIO35.',
+  { title: 'Tank level: HC-SR04 ultrasonic', part: 'us', option: ['level', 'ultrasonic'], why: 'Looks down at the water from above the tank. Needs 5 V. TRIG → GPIO25. ECHO outputs 5 V, so it goes through the divider to GPIO35: three 1 kΩ resistors, one on top (ECHO → OUT) and two in series below (OUT → GND, together 2 kΩ).',
     wires: [['us.VCC', 'rail.5V_6', '#e5392f'], ['us.GND', 'rail.GND_5', '#222428'], ['us.TRIG', 'esp.25', '#2fa8a8'], ['us.ECHO', 'div2.IN', '#2b8fd6'], ['div2.OUT', 'esp.35', '#2b8fd6'], ['div2.GND', 'rail.GND_12', '#222428']] },
   { title: 'Tank level: DIY wire probes', part: 'probe', option: ['level', 'probes'], why: 'Each probe wire goes through the 470k pull-up board to its GPIO (10% → 32, 33% → 33, 66% → 26, 95% → 14). The common wire → GPIO25, held LOW only while reading.',
     wires: [['probe.P1', 'pull.A1', '#2b8fd6'], ['probe.P2', 'pull.A2', '#2fbf5b'], ['probe.P3', 'pull.A3', '#f2c230'], ['probe.P4', 'pull.A4', '#e5392f'],

@@ -219,15 +219,17 @@ export const PARTS = [
     },
   },
   {
-    id: 'div2', name: '1k + 2k divider for the HC-SR04 ECHO', short: 'Echo divider', pos: [-70, 25, 0], option: ['level', 'ultrasonic'],
-    buy: [1, '1 kΩ + 2 kΩ resistor', 'Drops the HC-SR04 ECHO from 5 V to 3.3 V for the ESP32', 2, 5],
-    info: 'OUT = IN × 2 kΩ / (1 kΩ + 2 kΩ) = ⅔ of IN: the 5 V ECHO pulse becomes 3.3 V, safe for GPIO35.',
+    id: 'div2', name: 'Echo divider: three 1 kΩ resistors (1k on top, 1k + 1k in series below)', short: 'Echo divider', pos: [-70, 25, 0], option: ['level', 'ultrasonic'],
+    buy: [3, '1 kΩ resistor (brown-black-red-gold)', 'Drops the HC-SR04 ECHO from 5 V to 3.3 V for the ESP32: one on top, two in series below (= 2 kΩ)', 1, 2],
+    info: 'Three 1 kΩ resistors (brown-black-red-gold). ECHO → 1k → OUT, then OUT → 1k → 1k → GND: the two in series act as one 2 kΩ. OUT = IN × 2k / (1k + 2k) = ⅔ of IN, so the 5 V ECHO pulse becomes 3.3 V, safe for GPIO35. In series means end to end: the first one’s leg shares a breadboard row with the next one’s leg, and nothing else goes in that row.',
     pins: [P('IN', 'IN', -7, 0, { role: 'div-in' }), P('OUT', 'OUT', 7, -2.54, { role: 'out-analog' }), P('GND', 'GND', 7, 2.54, { role: 'gnd' })],
     build(p) {
       const g = p.inner;
       pcb(g, 20, 18, '#c79c5a', c => { c.fillStyle = '#9b7438'; for (let x = -9; x < 10; x += 2.54) for (let z = -8; z < 9; z += 2.54) { c.beginPath(); c.arc(x, z, 0.45, 0, 7); c.fill(); } hdrLabels(c, [p.def.pins[0]], 2, 1.6, 'left'); hdrLabels(c, p.def.pins.slice(1), -2, 1.6); txt(c, 'ECHO', 0, 8, 1.3, '#3b2a12', 'center', 800); });
-      resistor(g, 0, -5, ['#8a4a1c', '#111', '#e5392f', '#c9a227']);  // 1k
-      resistor(g, 0, 5.5, ['#e5392f', '#111', '#e5392f', '#c9a227']); // 2k
+      const k1 = ['#8a4a1c', '#111', '#e5392f', '#c9a227'];  // 1k: brown-black-red-gold
+      resistor(g, 0, -5, k1);                                // top 1k: IN → OUT
+      resistor(g, 0, 2, k1); resistor(g, 0, 6.6, k1);        // bottom: 1k + 1k in series = 2k, OUT → GND
+      const link = cyl(g, 0.25, 4.6, METAL(), 5.5, TOP + 2.2, 4.3, 6); link.rotation.x = Math.PI / 2; link.position.y = TOP + 2.2; // the series joint
     },
   },
   // ---------- option: DIY copper-wire probes in the tank ----------

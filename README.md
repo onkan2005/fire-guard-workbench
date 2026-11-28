@@ -21,7 +21,7 @@ To use it in a Laravel app, copy this folder into `public/workbench` and open `/
 ## What you can do
 
 - **Assemble.** All parts start on the bench: ESP32 DevKit, power rails, DHT22, MQ-2 with its 10k/20k divider,
-  IR flame sensor, an HC-SR04 ultrasonic tank-level sensor above the tank (ECHO through a 1k/2k divider), 2-channel relay, 20×4 I2C LCD, an LED panel of 17 single 5 mm LEDs
+  IR flame sensor, an HC-SR04 ultrasonic tank-level sensor above the tank (ECHO through a divider of three 1 kΩ resistors: 1k on top, 1k + 1k in series below), 2-channel relay, 20×4 I2C LCD, an LED panel of 17 single 5 mm LEDs
   (one per workshop state, each with a 220 Ω resistor) driven by three chained 74HC595 shift registers on GPIO23/18/13, buzzer, a 4×AAA battery holder (6 V) for the pumps,
   and the two pumps' own red/black leads. Drag a board to move it, and press **R** (or *Rotate 90°*) to turn it.
 - **Wire.** Click a pin, then another pin, to add a jumper. Click a wire to recolor or delete it (**Del**).
@@ -48,7 +48,7 @@ Pick them at the top of the **Build guide** tab; the 3D parts, wiring guide, fir
 |---|---|---|
 | LED indicators | 17 single 5 mm LEDs on three chained **74HC595** shift registers (DATA 23, CLOCK 18, LATCH 13), 330 Ω each | 5 common-cathode **RGB LEDs** on a **PCA9685** 16-channel PWM board sharing the LCD's I2C bus (real orange/yellow by mixing) |
 | PCA9685 board (RGB only) | Small **breakout** board | Uno-size **servo shield** (same chip and code), jumpered to the breadboard's SDA/SCL rows, 5V and GND |
-| Tank level | **HC-SR04** ultrasonic above the tank (TRIG 25, ECHO 35 through a 1k/2k divider) | **DIY wire probes**: bare copper wires at 10/33/66/95 % (GPIO 32/33/26/14 through 470 kΩ pull-ups), common wire on GPIO25 driven LOW only while reading |
+| Tank level | **HC-SR04** ultrasonic above the tank (TRIG 25, ECHO 35 through a 1k / 1k+1k divider) | **DIY wire probes**: bare copper wires at 10/33/66/95 % (GPIO 32/33/26/14 through 470 kΩ pull-ups), common wire on GPIO25 driven LOW only while reading |
 
 **One jumper per pin.** When several pins share a signal they meet in a breadboard row, never on one pin: GPIO21/22 go to the
 breadboard's **SDA** and **SCL** rows, where the LCD and the PCA9685 plug in too; the battery's red and black leads go to the

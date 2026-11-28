@@ -75,6 +75,13 @@ const TRACES = {
   },
   div(hw, o, id = 'div') {
     const vin = () => (hw.netV(id + '.IN') ?? 0) > 0.3, [r1, r2] = id === 'div2' ? ['1 kΩ', '2 kΩ'] : ['10 kΩ', '20 kΩ'];
+    if (id === 'div2') return [ // three 1k: one on top, two in series below
+      { a: [-7, 0], b: [-3.1, -5], net: 'sig', grp: 'all', on: vin, la: 'IN', lb: '1 kΩ' },
+      { a: [3.1, -5], b: [7, -2.54], net: 'out', grp: 'all', on: vin, lb: 'OUT' },
+      { a: [7, -2.54], b: [-3.1, 2], net: 'out', grp: 'all', on: vin, lb: '1 kΩ' },
+      { a: [3.1, 2], b: [-3.1, 6.6], net: 'out', grp: 'all', on: vin, lb: '+ 1 kΩ' },
+      { a: [3.1, 6.6], b: [7, 2.54], net: 'gnd', grp: 'all', on: () => false, lb: 'GND' },
+    ];
     return [
       { a: [-7, 0], b: [-3.1, -5], net: 'sig', grp: 'all', on: vin, la: 'IN', lb: r1 },
       { a: [3.1, -5], b: [7, -2.54], net: 'out', grp: 'all', on: vin, lb: 'OUT' },
@@ -84,7 +91,7 @@ const TRACES = {
   },
 };
 TRACES.div2 = (hw, o) => TRACES.div(hw, o, 'div2');
-GROUPS.div2 = [['all', 'Echo divider', NET.sig, 'ECHO (5 V) → 1 kΩ → OUT → 2 kΩ → GND. OUT = ⅔ × 5 V = 3.3 V, safe for GPIO35.']];
+GROUPS.div2 = [['all', 'Echo divider', NET.sig, 'ECHO (5 V) → 1 kΩ → OUT → 1 kΩ → 1 kΩ → GND. The two in series make 2 kΩ, so OUT = ⅔ × 5 V = 3.3 V, safe for GPIO35.']];
 // which signal group a pin of an inspectable part belongs to (used by "Follow inside")
 export function groupForPin(pin) {
   const [part, p] = pin.split('.');
