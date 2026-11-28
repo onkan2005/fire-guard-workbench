@@ -10,7 +10,7 @@ function rgbPanelStep(drv, board, note) {
 }
 
 export const GUIDE = [
-  { title: 'Power rails', part: 'rail', why: 'Bring 3.3 V, 5 V and GND from the ESP32 to the rail board so every module can share them.',
+  { title: 'Power rails', part: 'rail', why: 'Bring 3.3 V, 5 V and GND from the ESP32 to the breadboard rails so every module can share them. A pin only ever takes one jumper: when several pins share a signal, they meet in a breadboard row.',
     wires: [['esp.3V3', 'rail.3V3_0', '#f08a24'], ['esp.5V', 'rail.5V_0', '#e5392f'], ['esp.GND1', 'rail.GND_0', '#222428']] },
   { title: 'DHT22 temperature sensor', part: 'dht', why: 'Powered from 3V3 so its DATA line never goes above 3.3 V. DATA → GPIO4.',
     wires: [['dht.VCC', 'rail.3V3_1', '#f08a24'], ['dht.GND', 'rail.GND_1', '#222428'], ['dht.DATA', 'esp.4', '#2fbf5b']] },
@@ -26,23 +26,23 @@ export const GUIDE = [
       ['pull.VCC', 'rail.3V3_7', '#f08a24'], ['probe.COM', 'esp.25', '#9aa3ab']] },
   { title: '2-channel relay', part: 'relay', why: 'Coil side runs on 5 V. IN1 → GPIO16 (sprinkler), IN2 → GPIO17 (refill). Inputs are active-LOW.',
     wires: [['relay.VCC', 'rail.5V_2', '#e5392f'], ['relay.GND', 'rail.GND_6', '#222428'], ['relay.IN1', 'esp.16', '#e0559a'], ['relay.IN2', 'esp.17', '#8bc34a']] },
-  { title: '20×4 I2C LCD', part: 'lcd', why: 'I2C bus: SDA → GPIO21, SCL → GPIO22. 5 V for proper contrast.',
-    wires: [['lcd.VCC', 'rail.5V_3', '#e5392f'], ['lcd.GND', 'rail.GND_7', '#222428'], ['lcd.SDA', 'esp.21', '#2b8fd6'], ['lcd.SCL', 'esp.22', '#f2c230']] },
+  { title: '20×4 I2C LCD', part: 'lcd', why: 'I2C bus through the breadboard’s SDA and SCL rows: GPIO21 → SDA row, GPIO22 → SCL row, then LCD SDA and SCL into the same rows (one jumper per hole, never two on one pin). 5 V for proper contrast.',
+    wires: [['lcd.VCC', 'rail.5V_3', '#e5392f'], ['lcd.GND', 'rail.GND_7', '#222428'], ['esp.21', 'rail.SDA_0', '#2b8fd6'], ['esp.22', 'rail.SCL_0', '#f2c230'], ['lcd.SDA', 'rail.SDA_1', '#2b8fd6'], ['lcd.SCL', 'rail.SCL_1', '#f2c230']] },
   { title: 'LED driver (3× 74HC595)', part: 'sr', option: ['leds', 'single'], why: 'Three chained shift registers turn 3 ESP32 pins into 24 outputs. DATA → GPIO23, CLOCK → GPIO18, LATCH → GPIO13. Powered from 5 V.',
     wires: [['sr.VCC', 'rail.5V_4', '#e5392f'], ['sr.GND', 'rail.GND_8', '#222428'], ['sr.DATA', 'esp.23', '#00c2a8'], ['sr.CLOCK', 'esp.18', '#f2c230'], ['sr.LATCH', 'esp.13', '#b06ee0']] },
   { title: 'LED indicator panel (17 LEDs)', part: 'panel', option: ['leds', 'single'], why: 'Each driver output Qn goes to LED Ln (each LED has its own 330 Ω resistor). The panel GND bus joins the GND rail.',
     wires: [...Array.from({ length: 17 }, (_, i) => ['sr.Q' + i, 'panel.L' + i, LED_COLORS[i]]), ['panel.GND', 'rail.GND_11', '#222428']] },
-  { title: 'LED driver (PCA9685, I2C)', part: 'pca', option: [['leds', 'rgb'], ['board', 'breakout']], why: 'Shares the LCD’s I2C bus: SDA → GPIO21, SCL → GPIO22 (two jumpers on the same ESP32 pins is fine). VCC from 5 V so the green and blue LEDs are bright. OE stays unconnected (outputs on).',
-    wires: [['pca.VCC', 'rail.5V_4', '#e5392f'], ['pca.GND', 'rail.GND_8', '#222428'], ['pca.SDA', 'esp.21', '#2b8fd6'], ['pca.SCL', 'esp.22', '#f2c230']] },
+  { title: 'LED driver (PCA9685, I2C)', part: 'pca', option: [['leds', 'rgb'], ['board', 'breakout']], why: 'Shares the LCD’s I2C bus: SDA and SCL go into the breadboard’s SDA and SCL rows next to the LCD’s, which carry GPIO21/22. VCC from 5 V so the green and blue LEDs are bright. OE stays unconnected (outputs on).',
+    wires: [['pca.VCC', 'rail.5V_4', '#e5392f'], ['pca.GND', 'rail.GND_8', '#222428'], ['pca.SDA', 'rail.SDA_2', '#2b8fd6'], ['pca.SCL', 'rail.SCL_2', '#f2c230']] },
   rgbPanelStep('pca', 'breakout', 'the PCA9685 board has the resistors'),
-  { title: 'LED driver (PCA9685 servo shield, I2C)', part: 'pcas', option: [['leds', 'rgb'], ['board', 'shield']], why: 'The Uno-style servo shield does not plug onto an ESP32: use male-to-female jumpers from its header pins. SDA → GPIO21, SCL → GPIO22 (shared with the LCD), 5V and GND from the rails, VCC-select jumper on 5V so the green and blue LEDs are bright. The green V+ screw terminal is servo power: leave it empty.',
-    wires: [['pcas.VCC', 'rail.5V_4', '#e5392f'], ['pcas.GND', 'rail.GND_8', '#222428'], ['pcas.SDA', 'esp.21', '#2b8fd6'], ['pcas.SCL', 'esp.22', '#f2c230']] },
+  { title: 'LED driver (PCA9685 servo shield, I2C)', part: 'pcas', option: [['leds', 'rgb'], ['board', 'shield']], why: 'The Uno-style servo shield does not plug onto an ESP32: use male-to-female jumpers from its header pins. SDA and SCL into the breadboard’s SDA and SCL rows (shared with the LCD, carried to GPIO21/22), 5V and GND from the rails, VCC-select jumper on 5V so the green and blue LEDs are bright. The green V+ screw terminal is servo power: leave it empty.',
+    wires: [['pcas.VCC', 'rail.5V_4', '#e5392f'], ['pcas.GND', 'rail.GND_8', '#222428'], ['pcas.SDA', 'rail.SDA_2', '#2b8fd6'], ['pcas.SCL', 'rail.SCL_2', '#f2c230']] },
   rgbPanelStep('pcas', 'shield', 'use only the PWM (signal) pin of each servo header; the shield has 220 Ω resistors on the outputs'),
   { title: 'Buzzer', part: 'buzz', why: 'SIG → GPIO19 drives the S8050 transistor, which switches the buzzer from 5 V.',
     wires: [['buzz.VCC', 'rail.5V_5', '#e5392f'], ['buzz.GND', 'rail.GND_9', '#222428'], ['buzz.SIG', 'esp.19', '#b06ee0']] },
-  { title: 'Pump power: AAA batteries through the relay', part: 'psu', why: 'Battery + (red lead) goes to both COM terminals; each NO feeds a pump’s red lead; each pump’s black lead returns to battery − (black lead). Battery − also joins the GND rail.',
-    wires: [['psu.VCC', 'relay.COM1', '#e5392f'], ['psu.VCC', 'relay.COM2', '#e5392f'], ['relay.NO1', 'pumpS.P', '#e5392f'], ['relay.NO2', 'pumpR.P', '#e5392f'],
-      ['pumpS.N', 'psu.GND', '#222428'], ['pumpR.N', 'psu.GND', '#222428'], ['psu.GND', 'rail.GND_10', '#222428']] },
+  { title: 'Pump power: AAA batteries through the relay', part: 'psu', why: 'The battery has one red and one black lead, so they go into the breadboard’s 6V+ and 6V− rows. 6V+ row → both relay COM terminals; each NO feeds a pump’s red lead; each pump’s black lead → the 6V− row. One wire joins 6V− to the GND rail (common ground), and the pump current stays off the ESP32’s GND rail.',
+    wires: [['psu.VCC', 'rail.BATP_0', '#e5392f'], ['rail.BATP_1', 'relay.COM1', '#e5392f'], ['rail.BATP_2', 'relay.COM2', '#e5392f'], ['relay.NO1', 'pumpS.P', '#e5392f'], ['relay.NO2', 'pumpR.P', '#e5392f'],
+      ['psu.GND', 'rail.BATN_0', '#222428'], ['pumpS.N', 'rail.BATN_1', '#222428'], ['pumpR.N', 'rail.BATN_2', '#222428'], ['rail.BATN_3', 'rail.GND_10', '#222428']] },
 ];
 
 // ---------- build options ----------

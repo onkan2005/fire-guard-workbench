@@ -47,8 +47,13 @@ Pick them at the top of the **Build guide** tab; the 3D parts, wiring guide, fir
 | Option | Choice A (default) | Choice B |
 |---|---|---|
 | LED indicators | 17 single 5 mm LEDs on three chained **74HC595** shift registers (DATA 23, CLOCK 18, LATCH 13), 330 Ω each | 5 common-cathode **RGB LEDs** on a **PCA9685** 16-channel PWM board sharing the LCD's I2C bus (real orange/yellow by mixing) |
-| PCA9685 board (RGB only) | Small **breakout** board | Uno-size **servo shield** (same chip and code), jumpered to the ESP32: SDA 21, SCL 22, 5V, GND |
+| PCA9685 board (RGB only) | Small **breakout** board | Uno-size **servo shield** (same chip and code), jumpered to the breadboard's SDA/SCL rows, 5V and GND |
 | Tank level | **HC-SR04** ultrasonic above the tank (TRIG 25, ECHO 35 through a 1k/2k divider) | **DIY wire probes**: bare copper wires at 10/33/66/95 % (GPIO 32/33/26/14 through 470 kΩ pull-ups), common wire on GPIO25 driven LOW only while reading |
+
+**One jumper per pin.** When several pins share a signal they meet in a breadboard row, never on one pin: GPIO21/22 go to the
+breadboard's **SDA** and **SCL** rows, where the LCD and the PCA9685 plug in too; the battery's red and black leads go to the
+**6V+** and **6V−** rows, which feed both relay COM terminals and take both pump black leads (one wire joins 6V− to the GND rail).
+The Checks tab warns about any pin with two jumpers.
 
 Or click a part in 3D and use **Replace ▾** in its toolbar to swap it for an alternative (74HC595 ↔ PCA9685, breakout ↔ servo shield, HC-SR04 ↔ wire probes).
 
@@ -118,7 +123,7 @@ A missing `;` is reported like a compiler error. A loop that never calls `delay(
 
 ## Self-test
 
-`tests/selftest.js` drives the real app and checks 127 things: wiring and checks, the default firmware, every
+`tests/selftest.js` drives the real app and checks 225 things: wiring and checks, the default firmware, every
 workshop scenario (fire, gas, refill, LEDs, LCD, buzzer), the HC-SR04, the 74HC595 chain, miswiring detection,
 the C++ translation, timing, layouts, Inspect, Trace, the data log and saving. Open the workbench, then in the
 browser console:

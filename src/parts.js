@@ -123,17 +123,24 @@ export const PARTS = [
     },
   },
   {
-    id: 'rail', name: 'Power rail board', short: 'Rails', pos: [0, 62, 0], owned: false,
-    buy: [1, '830-point breadboard', 'Its power rails share 3.3 V, 5 V and GND between all the modules (shown here as a rail board)', 80, 120],
-    info: 'Three rails so many modules can share one supply. Every hole in a rail is connected together.',
-    pins: [...Array.from({ length: 12 }, (_, i) => P('3V3_' + i, '3V3', -42 + i * 6, -7)),
-      ...Array.from({ length: 12 }, (_, i) => P('5V_' + i, '5V', -42 + i * 6, 0)),
-      ...Array.from({ length: 16 }, (_, i) => P('GND_' + i, 'GND', -42 + i * 6, 7))],
-    internal: [['3V3_', 12], ['5V_', 12], ['GND_', 16]],
+    id: 'rail', name: 'Breadboard rails and shared rows', short: 'Breadboard', pos: [0, 62, 0], owned: false,
+    buy: [1, '830-point breadboard', 'Its power rails share 3.3 V, 5 V and GND between all the modules, and its 5-hole rows join the pins that share a signal (I2C SDA/SCL, the pump battery). Shown here as a rail board.', 80, 120],
+    info: 'One jumper per hole, so pins that share a connection meet in a strip instead of on one pin. Every hole in a strip is connected together. 3V3, 5V, GND: the power rails. 6V+ and 6V−: the pump battery, kept off the ESP32’s GND rail (one wire joins 6V− to GND for the common ground). SDA, SCL: the I2C bus from GPIO21/22, shared by the LCD and the PCA9685.',
+    pins: [...Array.from({ length: 12 }, (_, i) => P('3V3_' + i, '3V3', -42 + i * 6, -14)),
+      ...Array.from({ length: 12 }, (_, i) => P('5V_' + i, '5V', -42 + i * 6, -7)),
+      ...Array.from({ length: 16 }, (_, i) => P('GND_' + i, 'GND', -42 + i * 6, 0)),
+      ...Array.from({ length: 5 }, (_, i) => P('BATP_' + i, '6V+', -42 + i * 6, 7, { tip: 'Pump battery + (red lead). Feeds both relay COM terminals.' })),
+      ...Array.from({ length: 5 }, (_, i) => P('BATN_' + i, '6V−', 6 + i * 6, 7, { tip: 'Pump battery − (black lead) and both pump black leads. One wire joins it to the GND rail.' })),
+      ...Array.from({ length: 5 }, (_, i) => P('SDA_' + i, 'SDA', -42 + i * 6, 14, { tip: 'I2C data: ESP32 GPIO21, LCD SDA and PCA9685 SDA all meet here.' })),
+      ...Array.from({ length: 5 }, (_, i) => P('SCL_' + i, 'SCL', 6 + i * 6, 14, { tip: 'I2C clock: ESP32 GPIO22, LCD SCL and PCA9685 SCL all meet here.' }))],
+    internal: [['3V3_', 12], ['5V_', 12], ['GND_', 16], ['BATP_', 5], ['BATN_', 5], ['SDA_', 5], ['SCL_', 5]],
     build(p) {
-      pcb(p.inner, 120, 24, '#ecece4', c => {
-        const row = (z, col, name) => { c.fillStyle = col; c.fillRect(-46, z - 2.6, 104, 0.5); c.fillRect(-46, z + 2.1, 104, 0.5); txt(c, name, -53, z, 2.6, col, 'center', 800); };
-        row(-7, '#f08a24', '3V3'); row(0, '#e5392f', '5V'); row(7, '#2b2f36', 'GND');
+      pcb(p.inner, 120, 38, '#ecece4', c => {
+        const line = (z, x0, x1, col) => { c.fillStyle = col; c.fillRect(x0, z - 2.6, x1 - x0, 0.5); c.fillRect(x0, z + 2.1, x1 - x0, 0.5); };
+        const row = (z, col, name) => { line(z, -46, 58, col); txt(c, name, -53, z, 2.6, col, 'center', 800); };
+        const strip = (z, x, col, name) => { line(z, x - 4, x + 28, col); txt(c, name, x - 9.5, z, 2.4, col, 'center', 800); };
+        row(-14, '#f08a24', '3V3'); row(-7, '#e5392f', '5V'); row(0, '#2b2f36', 'GND');
+        strip(7, -42, '#c0392b', '6V+'); strip(7, 6, '#555b63', '6V−'); strip(14, -42, '#2b8fd6', 'SDA'); strip(14, 6, '#c9a21a', 'SCL');
       });
     },
   },

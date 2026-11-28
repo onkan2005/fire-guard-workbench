@@ -139,6 +139,13 @@ export class Hardware {
         }
       }
     }
+    // one jumper per pin: a header pin, a breadboard hole or a battery lead can't take two. Shared signals meet in a breadboard row.
+    const ends = {};
+    for (const w of this.wires) for (const p of [w.a, w.b]) ends[p] = (ends[p] || 0) + 1;
+    for (const [p, n] of Object.entries(ends)) if (n > 1) {
+      const id = p.split('.')[0], name = PIN_GPIO[p] !== undefined ? 'GPIO' + PIN_GPIO[p] : this.label[p] || p;
+      add('warn', id, `${name} has ${n} jumpers on one pin, which won't fit on the real board. Run one jumper to a breadboard row (SDA/SCL, 6V+/6V−, or a power rail) and plug the others into the same row.`);
+    }
     const NEED5 = { us: 'the HC-SR04 needs 5 V and will not echo reliably', mq2: 'its heater needs 5 V, readings will be far too low', relay: 'the relay coils need 5 V and will not click', lcd: 'the text will be very faint' };
     for (const d of PARTS) {
       if (['esp', 'rail', 'pumpS', 'pumpR', 'div'].includes(d.id) || (this.active && !this.active.has(d.id))) continue;

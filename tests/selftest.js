@@ -205,9 +205,10 @@ export async function run(only = SECTIONS) {
         ['3V3 shorted to GND', l => l.concat([{ a: 'esp.3V3', b: 'rail.GND_15' }]), 'Short circuit', 'error'],
         ['Pump powered from the ESP32', l => drop(l, 'relay.NO1', 'pumpS.P').concat([{ a: 'pumpS.P', b: 'rail.5V_7' }]), 'powered from the ESP32', 'error'],
         ['Pump wired straight to the battery', l => drop(l, 'relay.NO1', 'pumpS.P').concat([{ a: 'pumpS.P', b: 'psu.VCC' }]), 'always on', 'warn'],
-        ['Battery − not joined to ESP32 GND', l => drop(l, 'psu.GND', 'rail.GND_10'), 'not joined to the ESP32 GND', 'warn'],
+        ['Battery − not joined to ESP32 GND', l => drop(l, 'rail.BATN_3', 'rail.GND_10'), 'not joined to the ESP32 GND', 'warn'],
         ['Battery + on the ESP32 5V', l => l.concat([{ a: 'psu.VCC', b: 'rail.5V_8' }]), 'Battery + is joined', 'warn'],
-        ['SDA/SCL swapped', l => drop(drop(l, 'lcd.SDA', 'esp.21'), 'lcd.SCL', 'esp.22').concat([{ a: 'lcd.SDA', b: 'esp.22' }, { a: 'lcd.SCL', b: 'esp.21' }]), 'swapped', 'warn'],
+        ['SDA/SCL swapped', l => drop(drop(l, 'lcd.SDA', 'rail.SDA_1'), 'lcd.SCL', 'rail.SCL_1').concat([{ a: 'lcd.SDA', b: 'rail.SCL_1' }, { a: 'lcd.SCL', b: 'rail.SDA_1' }]), 'swapped', 'warn'],
+        ['Two jumpers on one ESP32 pin', l => l.concat([{ a: 'pca.SDA', b: 'esp.21' }]), 'jumpers on one pin', 'warn'],
         ['LED panel GND missing', l => drop(l, 'panel.GND', 'rail.GND_11'), 'GND bus is not connected', 'warn'],
         ['Divider GND missing', l => drop(l, 'div.GND', 'rail.GND_3'), 'Divider GND is not connected', 'warn'],
         ['Module with VCC but no GND', l => drop(l, 'dht.GND', 'rail.GND_1'), 'GND is not connected', 'warn'],
@@ -219,7 +220,7 @@ export async function run(only = SECTIONS) {
         const r = await runCode(DEFAULT_SKETCH, 2500);
         ok('DHT DATA unplugged → runtime NaN warning', /DHT on GPIO4: no sensor answered/.test(r.serial), (r.serial.match(/\[sim\][^\n]*/g) || []).join(' | '));
       });
-      await withWires(l => drop(drop(l, 'lcd.SDA', 'esp.21'), 'lcd.SCL', 'esp.22').concat([{ a: 'lcd.SDA', b: 'esp.22' }, { a: 'lcd.SCL', b: 'esp.21' }]), async () => {
+      await withWires(l => drop(drop(l, 'lcd.SDA', 'rail.SDA_1'), 'lcd.SCL', 'rail.SCL_1').concat([{ a: 'lcd.SDA', b: 'rail.SCL_1' }, { a: 'lcd.SCL', b: 'rail.SDA_1' }]), async () => {
         const r = await runCode(DEFAULT_SKETCH, 2500);
         ok('Swapped I2C → LCD stays blank + warning', lcd().every(x => !x.trim()) && /nothing answered/.test(r.serial), lcd());
       });
@@ -402,6 +403,15 @@ void loop() { delay(1000); }
       const visible = () => [...fg.parts.values()].filter(p => p.group.visible).map(p => p.id);
       const total = () => guideFor(fg.options).reduce((n, s) => n + s.wires.length, 0);
       const ind = () => [...$('leds').querySelectorAll('li')].map(li => li.querySelector('.lm').textContent);
+      { // every build option: no pin or hole takes more than one jumper (shared signals meet in a breadboard row)
+        const bad = [];
+        for (const leds of ['single', 'rgb']) for (const board of ['breakout', 'shield']) for (const level of ['ultrasonic', 'probes']) {
+          const n = {};
+          for (const st of guideFor({ leds, board, level })) for (const w of st.wires) for (const p of w.slice(0, 2)) n[p] = (n[p] || 0) + 1;
+          for (const [p, c] of Object.entries(n)) if (c > 1) bad.push(`${leds}/${board}/${level}: ${p} ×${c}`);
+        }
+        ok('Every build: one jumper per pin (I2C and pump battery go through breadboard rows)', !bad.length, bad);
+      }
       wireAll(); fg.world.reset();
       // RGB LEDs + PCA9685
       fg.setOption('leds', 'rgb');
