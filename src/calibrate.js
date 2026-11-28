@@ -97,7 +97,7 @@ export function createCalibration({ page, getOptions, world, nvs, send, onSerial
       why: 'Every brand of RGB LED mixes colours a little differently. Orange and yellow are the ones that usually need a nudge.',
       steps: [
         'Run the sketch and set a fire class that shows orange and yellow (use a hair dryer on the DHT22).',
-        'Orange looks yellow: lower the green number in <code>ORANGE[3] = {255, 60, 0}</code> (try 30). Yellow looks green: lower the green in <code>YELLOW[3]</code>.',
+        'The code uses the values your team tested: yellow <code>{255, 50, 0}</code>, orange <code>{255, 15, 0}</code>, red <code>{255, 0, 0}</code>, green <code>{0, 255, 0}</code>, blue <code>{0, 0, 255}</code>. If a colour still looks off, change the green number of <code>ORANGE[3]</code> or <code>YELLOW[3]</code> a little at a time.',
         'Blue too dim next to the others: lower the red and green numbers of the other colours a little instead of raising blue.',
         'Upload again after each change.',
       ],

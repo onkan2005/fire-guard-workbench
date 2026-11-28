@@ -39,9 +39,9 @@ ${RGB ? `
 // colours as {red, green, blue}, 0..255
 const int OFF[3]    = {0, 0, 0};
 const int GREEN[3]  = {0, 255, 0};
-const int BLUE[3]   = {0, 60, 255};
-const int YELLOW[3] = {255, 170, 0};
-const int ORANGE[3] = {255, 60, 0};
+const int BLUE[3]   = {0, 0, 255};
+const int YELLOW[3] = {255, 50, 0};   // red + a little green (tested on the team's LEDs)
+const int ORANGE[3] = {255, 15, 0};   // red + a touch of green
 const int RED[3]    = {255, 0, 0};
 ` : `
 // ---- LED panel: bit n = shift register output Qn = LED Ln ----
@@ -378,6 +378,6 @@ export const DEFAULT_SKETCH = buildSketch();
 
 // Fingerprints of every earlier default sketch (all build options). A saved copy that matches one was never
 // edited, so on load it is upgraded to the current default firmware.
-const OLD_DEFAULTS = new Set(['b56b166f', '82efd895', '5259a80c', '7669663a', '4318b447', '42ffbfc5', '2b267f86', '7910d3a0']);
+const OLD_DEFAULTS = new Set(['3fcba65d', '89ee4aeb', 'b56b166f', '82efd895', '5259a80c', '7669663a', '4318b447', '42ffbfc5', '2b267f86', '7910d3a0']);
 export const sketchHash = s => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return x.toString(16).padStart(8, '0'); };
 export const isOldDefault = code => OLD_DEFAULTS.has(sketchHash(code));

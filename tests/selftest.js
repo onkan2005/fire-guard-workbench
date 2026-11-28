@@ -416,6 +416,10 @@ void loop() { delay(1000); }
       ok('RGB fire: sprinkler green, fume red, fire class lit', /^Green/.test(ind()[0]) && /^Red/.test(ind()[4]) && !/^off/.test(ind()[3]), ind());
       const seen = new Set(); fg.world.extinguish(); fg.world.temp = 80; for (let i = 0; i < 40; i++) { await sim(500); seen.add(ind()[3].split(' ')[0]); }
       ok('RGB: fire class shows orange/yellow as real mixed colours while cooling', seen.has('Orange') || seen.has('Yellow'), [...seen]);
+      fg.world.reset(); await sim(2500);
+      const classes = []; for (const t of [40, 50, 60, 70, 80]) { for (let i = 0; i < 12; i++) { fg.world.temp = t; await sim(250); } classes.push(ind()[3].split(' ')[0]); }
+      ok('RGB: fire classes show green, blue, yellow, orange, red (team-tested colour values)', classes.join() === 'Green,Blue,Yellow,Orange,Red', classes);
+      ok('RGB: firmware uses the tested values', /YELLOW\[3\] = \{255, 50, 0\}/.test(fg.editor.value) && /ORANGE\[3\] = \{255, 15, 0\}/.test(fg.editor.value) && /BLUE\[3\]   = \{0, 0, 255\}/.test(fg.editor.value));
       // the same chip on an Uno-size servo shield, chosen from the part's Replace menu
       fg.world.reset(); fg.rt.stop();
       const codeBefore = fg.editor.value;

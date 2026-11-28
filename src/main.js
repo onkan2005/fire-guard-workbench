@@ -664,7 +664,7 @@ function visuals(o, dt, time) {
   R('rgb').rgb.forEach(({ m, h }, i) => {
     const c = o.rgb[i], mx = Math.max(...c);
     if (mx < 0.03) { m.emissive.set('#000000'); m.color.set('#e8eef2'); h.material.opacity = 0; return; }
-    C.setRGB(c[0] / mx, c[1] / mx, c[2] / mx, THREE.SRGBColorSpace);
+    C.setRGB(...eyeRGB(c), THREE.SRGBColorSpace);
     m.color.copy(C); m.emissive.copy(C); m.emissiveIntensity = 0.6 + 0.8 * mx; h.material.color.copy(C); h.material.opacity = 0.5 + 0.4 * mx;
   });
   if (lp.dirty !== indicators(o).map(x => x.name).join()) renderLedPanel(o);
@@ -697,12 +697,15 @@ function hud(o) {
 // which LEDs in each row are lit, e.g. Tank level -> [Blue]
 const groupsLit = leds => LED_GROUPS.map(gr => ({ gr, lit: LED_SPEC.filter((l, i) => l.g === gr.key && leds[i]) }));
 // name the colour an RGB LED is showing (intensities 0..1)
+// colour names from the LED's red/green/blue light: yellow = red + ~20 % green, orange = red + ~6 % green
 function rgbName([r, g, b]) {
   if (Math.max(r, g, b) < 0.05) return null;
-  if (r >= 0.5 && b < 0.3) { const q = g / r; return q < 0.12 ? 'Red' : q < 0.5 ? 'Orange' : 'Yellow'; }
+  if (r >= 0.5 && b < 0.3) { const q = g / r; return q < 0.03 ? 'Red' : q < 0.13 ? 'Orange' : 'Yellow'; }
   return b >= g ? 'Blue' : 'Green';
 }
-const rgbCss = c => { const mx = Math.max(...c) || 1; return `rgb(${c.map(v => Math.round(v / mx * 255)).join(',')})`; };
+// how it looks to the eye: we see green far brighter than red, so a little green already turns red yellow
+const eyeRGB = ([r, g, b]) => { const e = [r, Math.min(1, g * 3.5), b], mx = Math.max(...e) || 1; return e.map(v => v / mx); };
+const rgbCss = c => `rgb(${eyeRGB(c).map(v => Math.round(v * 255)).join(',')})`;
 // what each of the 5 indicators shows right now, for either LED build
 function indicators(o) {
   if (options.leds === 'rgb') return LED_GROUPS.map((gr, i) => {
