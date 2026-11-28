@@ -212,7 +212,7 @@ export async function run(only = SECTIONS) {
         ['LED panel GND missing', l => drop(l, 'panel.GND', 'rail.GND_11'), 'GND bus is not connected', 'warn'],
         ['Divider GND missing', l => drop(l, 'div.GND', 'rail.GND_3'), 'Divider GND is not connected', 'warn'],
         ['Module with VCC but no GND', l => drop(l, 'dht.GND', 'rail.GND_1'), 'GND is not connected', 'warn'],
-        ['Using a flash pin', l => l.concat([{ a: 'buzz.SIG', b: 'esp.SD0' }]), 'flash', 'error'],
+        ['Using a flash pin', l => l.concat([{ a: 'buzz.P', b: 'esp.SD0' }]), 'flash', 'error'],
         ['MQ-2 on 3.3 V', l => drop(l, 'mq2.VCC', 'rail.5V_1').concat([{ a: 'mq2.VCC', b: 'rail.3V3_6' }]), 'MQ-2 is on 3.3 V', 'warn'],
       ];
       for (const [name, mut, txt, level] of cases) await withWires(mut, async () => ok(name + ' → ' + level, hasIssue(txt, level), issues().map(i => i.level + ': ' + i.msg).slice(0, 3)));

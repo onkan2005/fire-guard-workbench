@@ -94,7 +94,7 @@ export class Hardware {
       return false;
     };
     o.sprPump = pump('pumpS'); o.refPump = pump('pumpR');
-    o.buzz = this.vcc('buzz') >= 3 && (this.netV('buzz.SIG') ?? 0) > 1.5;
+    o.buzz = this.isGround('buzz.N') && (this.netV('buzz.P') ?? 0) > 1.5;
     const lg = this.isGround('panel.GND');
     o.leds = []; o.ledDim = [];
     for (let i = 0; i < 17; i++) { const v = lg ? this.netV('panel.L' + i) : null; o.leds[i] = v != null && v >= 2.4; o.ledDim[i] = o.leds[i] && v < 4; }
@@ -130,7 +130,7 @@ export class Hardware {
         const vmax = this.netV(m[0], new Set(), true);
         const drivers = m.filter(p => DRIVERS[p]);
         if (drivers.length && vmax != null && vmax > 3.6) add('error', drivers[0].split('.')[0], `GPIO${g} can see up to ${vmax.toFixed(1)} V from ${this.label[drivers[0]]} (max 3.6 V). ${drivers[0] === 'mq2.AO' ? 'Put the 10k/20k divider in between.' : drivers[0] === 'us.ECHO' ? 'Put the 1k/2k echo divider in between.' : 'Power that module from 3V3 instead.'}`);
-        const needsDrive = m.filter(p => /^(relay\.IN\d|sr\.(DATA|CLOCK|LATCH)|panel\.L\d+|buzz\.SIG|us\.TRIG)$/.test(p));
+        const needsDrive = m.filter(p => /^(relay\.IN\d|sr\.(DATA|CLOCK|LATCH)|panel\.L\d+|buzz\.P|us\.TRIG)$/.test(p));
         if (needsDrive.length && INPUT_ONLY.includes(g)) add('error', needsDrive[0].split('.')[0], `GPIO${g} is input-only, so it can't drive ${this.label[needsDrive[0]]}.`);
         const analog = m.filter(p => /^(div\.OUT|mq2\.AO)$/.test(p));
         if (analog.length) {

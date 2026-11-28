@@ -460,18 +460,19 @@ export const PARTS = [
     },
   },
   {
-    id: 'buzz', name: 'Active buzzer + S8050 driver', short: 'Buzzer', pos: [222, 38, 0],
-    buy: [1, 'Active buzzer 3–5 V module (S8050 transistor driver)', 'Audible alarm for gas and fire. The transistor drives it so the ESP32 pin is not overloaded.', 25, 45],
-    info: 'HIGH on SIG turns the transistor on and the buzzer sounds. Active buzzers beep by themselves; no tone() needed.',
-    pins: [P('VCC', 'VCC', -10, -2.54, { role: 'vcc' }), P('SIG', 'I/O', -10, 0, { role: 'in-digital' }), P('GND', 'GND', -10, 2.54, { role: 'gnd' })],
+    id: 'buzz', name: 'Active buzzer (2 pins: long leg +, short leg −)', short: 'Buzzer', pos: [222, 38, 0],
+    buy: [1, 'Active buzzer 3–5 V, 2 pins (long leg +)', 'Audible alarm for gas and fire. Must be ACTIVE (beeps by itself). Test: long leg to 3V3, short leg to GND. A steady beep means active; only a click means passive.', 10, 25],
+    info: 'A bare 2-pin active buzzer. The long leg (+, also marked + on top) goes to GPIO19, the short leg (−) to GND. HIGH on GPIO19 = beep. It draws about 20 mA at 3.3 V, which the ESP32 pin can drive directly; it is a bit quieter than at 5 V. Louder: add an S8050/2N2222 transistor with a 1 kΩ base resistor and run it from 5 V. Passive buzzer (only clicks): use tone(BUZZER_PIN, 2400) / noTone(BUZZER_PIN) instead of digitalWrite.',
+    pins: [P('P', '+ long', -13, -2.5, { kind: 'lead', y: 1.2, role: 'in-digital', tip: 'Long leg (+). Goes to GPIO19.' }), P('N', '− short', -9, 2.5, { kind: 'lead', y: 1.2, role: 'gnd', tip: 'Short leg (−). Goes to GND.' })],
     build(p) {
       const g = p.inner;
-      pcb(g, 26, 18, '#1f5fa8', c => { hdrLabels(c, p.def.pins, 2.2, 1.5); });
-      p.refs.body = cyl(g, 6, 9.5, mat('#121212', { roughness: 0.4 }), 4, TOP, 0, 32);
-      decal(g, 6, 6, c => { c.fillStyle = '#333'; c.beginPath(); c.arc(0, 0, 1.2, 0, 7); c.fill(); txt(c, '+', 0, -2.4, 1.6, '#ddd'); }, 4, TOP + 9.52, 0);
-      box(g, 3, 3, 1.6, BLACK(), -3, TOP, -5);
+      p.refs.body = cyl(g, 6, 9.5, mat('#121212', { roughness: 0.4 }), 4, 1.2, 0, 32);
+      decal(g, 10, 10, c => { c.fillStyle = '#333'; c.beginPath(); c.arc(0, 0, 1.2, 0, 7); c.fill(); txt(c, '+', -2.6, -2.6, 2.4, '#ddd', 'center', 800); }, 4, 10.72, 0);
+      // the legs come out of the bottom and are bent flat towards −x: long leg (+) and short leg (−)
+      for (const [z, len] of [[-2.5, 17], [2.5, 13]]) { const leg = cyl(g, 0.3, len, METAL(), 4 - len / 2, 0.9, z, 6); leg.rotation.z = Math.PI / 2; leg.position.y = 0.9; }
+      decal(g, 16, 10, c => { txt(c, '+ long', -4, -3.4, 1.8, '#e5392f', 'center', 800); txt(c, '− short', -4, 3.4, 1.8, '#c9ced4', 'center', 800); }, -6, 0.15, 0);
       const ring = new THREE.Mesh(new THREE.TorusGeometry(8, 0.5, 8, 40), new THREE.MeshBasicMaterial({ color: '#ff5a3c', transparent: true, opacity: 0 }));
-      ring.rotation.x = -Math.PI / 2; ring.position.set(4, TOP + 10, 0); g.add(ring); p.refs.ring = ring;
+      ring.rotation.x = -Math.PI / 2; ring.position.set(4, 11.5, 0); g.add(ring); p.refs.ring = ring;
     },
   },
   {

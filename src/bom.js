@@ -27,7 +27,7 @@ const ITEMS = [
 
   I('relay', 'outputs', 1, '2-channel 5 V relay module (opto-isolated, with JD-VCC jumper)', 'Switches the two pumps. A “high/low level trigger” version is easiest with a 3.3 V ESP32.', 90, 150),
   I('lcd', 'outputs', 1, '20×4 I2C LCD (HD44780 + PCF8574 backpack)', 'Pump states, tank level, temperature, fire class. Address usually 0x27 (sometimes 0x3F).', 300, 450),
-  I('buzzer', 'outputs', 1, 'Active buzzer module 3–5 V (with S8050 transistor)', 'The alarm. Must be ACTIVE (beeps on its own), not passive.', 25, 45),
+  I('buzzer', 'outputs', 1, 'Active buzzer 3–5 V, 2 pins (long leg +)', 'The alarm, driven straight from GPIO19. Must be ACTIVE: long leg to 3V3 and short leg to GND should give a steady beep (only a click = passive).', 10, 25),
   I('pumps', 'outputs', 2, '3–6 V mini submersible pump', 'Sprinkler pump (in the tank) and refill pump (in the water source).', 80, 150),
   I('hc595', 'outputs', 3, '74HC595 shift register, DIP-16 (74HCT595 if you can find it)', 'Three chained = 24 outputs from 3 ESP32 pins for the 17 LEDs.', 15, 30, { opt: ['leds', 'single'] }),
   I('socket', 'outputs', 3, '16-pin DIP IC socket', 'Solder the socket, not the chip: easy to replace a dead 74HC595.', 5, 10, { opt: ['leds', 'single'], optional: true }),
