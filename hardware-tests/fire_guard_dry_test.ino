@@ -8,6 +8,7 @@
 //       heat 30     add 30 C to the temperature reading to test the fire classes (heat 0 = off)
 //       pump1       run the sprinkler pump for 2 s        pump2   run the refill pump for 2 s
 //       status      print the readings now
+//   - Relay OFF releases the pin instead of driving it to 3.3 V, so 5 V relay boards really switch off.
 //   - If the DHT22 doesn't answer, the LCD shows T:?? DHT22 ERR and the Serial Monitor says what to check.
 //   - The LCD recovers by itself from electrical noise (pump motor, relay clicks): slower I2C, it only
 //     rewrites text that changed, and it re-syncs after every relay click and every 10 s.
@@ -35,6 +36,18 @@
 
 #define RELAY_ON  LOW      // these relay boards are active-LOW
 #define RELAY_OFF HIGH
+
+// 5 V relay boards often stay ON when the ESP32 says "off", because its HIGH is only 3.3 V.
+// So for OFF the pin is released (INPUT): the relay board's own pull-up resistor takes IN to its 5 V.
+// For ON the pin is driven LOW. Keep the relay board's trigger jumper (if it has one) on L.
+void relayWrite(int pin, bool on) {
+  if (on) {
+    pinMode(pin, OUTPUT);
+    digitalWrite(pin, LOW);
+  } else {
+    pinMode(pin, INPUT);
+  }
+}
 
 // ---- RGB LEDs: LED n uses PCA9685 channels 3n (red), 3n+1 (green), 3n+2 (blue) ----
 #define RGB_SPR   0   // sprinkler pump
@@ -113,10 +126,8 @@ void setup() {
   pinMode(TRIG_PIN, OUTPUT);
   digitalWrite(TRIG_PIN, LOW);
   pinMode(ECHO_PIN, INPUT);
-  pinMode(RELAY_SPR, OUTPUT);
-  pinMode(RELAY_REF, OUTPUT);
-  digitalWrite(RELAY_SPR, RELAY_OFF);
-  digitalWrite(RELAY_REF, RELAY_OFF);
+  relayWrite(RELAY_SPR, false);   // released = OFF (see relayWrite)
+  relayWrite(RELAY_REF, false);
   pinMode(BUZZER_PIN, OUTPUT);
   analogReadResolution(12);
   prefs.begin("fireguard", false);
@@ -235,9 +246,9 @@ void handleSerial() {
   if (cmd.indexOf("pump1") >= 0 || cmd.indexOf("pump2") >= 0) {
     bool spr = cmd.indexOf("pump1") >= 0;
     Serial.println(spr ? "TEST: sprinkler pump ON for 2 s" : "TEST: refill pump ON for 2 s");
-    digitalWrite(spr ? RELAY_SPR : RELAY_REF, RELAY_ON);
+    relayWrite(spr ? RELAY_SPR : RELAY_REF, true);
     delay(2000);
-    digitalWrite(spr ? RELAY_SPR : RELAY_REF, RELAY_OFF);
+    relayWrite(spr ? RELAY_SPR : RELAY_REF, false);
     Serial.println("TEST: pump OFF");
     return;
   }
@@ -362,8 +373,8 @@ void loop() {
     refLocked = true;
     Serial.println("TEST: refill pump stopped after 3 s (no water). Type tank 100 to end the refill (it stops at 95 %).");
   }
-  digitalWrite(RELAY_SPR, sprinkler && !sprLocked ? RELAY_ON : RELAY_OFF);
-  digitalWrite(RELAY_REF, refill && !refLocked ? RELAY_ON : RELAY_OFF);
+  relayWrite(RELAY_SPR, sprinkler && !sprLocked);
+  relayWrite(RELAY_REF, refill && !refLocked);
   int relays = (sprinkler && !sprLocked ? 1 : 0) + (refill && !refLocked ? 2 : 0);
   if (relays != lastRelays) {           // a relay just clicked: give the spike a moment, then re-sync the LCD
     lastRelays = relays;
