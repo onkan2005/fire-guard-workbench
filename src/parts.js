@@ -125,14 +125,14 @@ export const PARTS = [
   {
     id: 'rail', name: 'Breadboard rails and shared rows', short: 'Breadboard', pos: [0, 62, 0], owned: false,
     buy: [1, '830-point breadboard', 'Its power rails share 3.3 V, 5 V and GND between all the modules, and its 5-hole rows join the pins that share a signal (I2C SDA/SCL, the pump battery). Shown here as a rail board.', 80, 120],
-    info: 'One jumper per hole, so pins that share a connection meet in a strip instead of on one pin. Every hole in a strip is connected together. 3V3, 5V, GND: the power rails. 6V+ and 6V−: the pump battery, kept off the ESP32’s GND rail (one wire joins 6V− to GND for the common ground). SDA, SCL: the LCD’s I2C bus from GPIO21/22 (the PCA9685 has its own bus on GPIO18/23).',
+    info: 'One jumper per hole, so pins that share a connection meet in a strip instead of on one pin. Every hole in a strip is connected together. 3V3, 5V, GND: the power rails. 6V+ and 6V−: the pump battery, kept off the ESP32’s GND rail (one wire joins 6V− to GND for the common ground). SDA, SCL: the I2C bus from GPIO21/22, shared by the LCD and the PCA9685.',
     pins: [...Array.from({ length: 12 }, (_, i) => P('3V3_' + i, '3V3', -42 + i * 6, -14)),
       ...Array.from({ length: 12 }, (_, i) => P('5V_' + i, '5V', -42 + i * 6, -7)),
       ...Array.from({ length: 16 }, (_, i) => P('GND_' + i, 'GND', -42 + i * 6, 0)),
       ...Array.from({ length: 5 }, (_, i) => P('BATP_' + i, '6V+', -42 + i * 6, 7, { tip: 'Pump battery + (red lead). Feeds both relay COM terminals.' })),
       ...Array.from({ length: 5 }, (_, i) => P('BATN_' + i, '6V−', 6 + i * 6, 7, { tip: 'Pump battery − (black lead) and both pump black leads. One wire joins it to the GND rail.' })),
-      ...Array.from({ length: 5 }, (_, i) => P('SDA_' + i, 'SDA', -42 + i * 6, 14, { tip: 'I2C data for the LCD: ESP32 GPIO21 and LCD SDA meet here.' })),
-      ...Array.from({ length: 5 }, (_, i) => P('SCL_' + i, 'SCL', 6 + i * 6, 14, { tip: 'I2C clock for the LCD: ESP32 GPIO22 and LCD SCL meet here.' }))],
+      ...Array.from({ length: 5 }, (_, i) => P('SDA_' + i, 'SDA', -42 + i * 6, 14, { tip: 'I2C data: ESP32 GPIO21, LCD SDA and PCA9685 SDA all meet here.' })),
+      ...Array.from({ length: 5 }, (_, i) => P('SCL_' + i, 'SCL', 6 + i * 6, 14, { tip: 'I2C clock: ESP32 GPIO22, LCD SCL and PCA9685 SCL all meet here.' }))],
     internal: [['3V3_', 12], ['5V_', 12], ['GND_', 16], ['BATP_', 5], ['BATN_', 5], ['SDA_', 5], ['SCL_', 5]],
     build(p) {
       pcb(p.inner, 120, 38, '#ecece4', c => {
@@ -380,7 +380,7 @@ export const PARTS = [
   {
     id: 'pca', name: 'PCA9685 16-channel PWM board (LED driver)', short: 'PCA9685', pos: [30, 118, 0], option: [['leds', 'rgb'], ['board', 'breakout']],
     buy: [1, 'PCA9685 16-channel 12-bit PWM board (I2C, 0x40)', 'Drives the 5 RGB LEDs (15 channels) with real PWM, so orange and yellow are possible. Uses the LCD’s I2C wires, no extra ESP32 pins. Most boards already have a 220 Ω resistor on every output.', 180, 300],
-    info: 'An I2C PWM chip: the ESP32 sends “channel n, brightness x” over its own I2C bus, Wire1: SDA → GPIO18, SCL → GPIO23 (address 0x40) and the board keeps all 16 outputs pulsing at 1 kHz by itself. Each output already has a 220 Ω series resistor. The I2C/power pins on the left are passed through to the right side for chaining.',
+    info: 'An I2C PWM chip: the ESP32 sends “channel n, brightness x” over SDA/SCL (address 0x40) and the board keeps all 16 outputs pulsing at 1 kHz by itself. Each output already has a 220 Ω series resistor. The I2C/power pins on the left are passed through to the right side for chaining.',
     pins: [...['GND', 'OE', 'SCL', 'SDA', 'VCC', 'VP'].map((id, i) => P(id, id === 'VP' ? 'V+' : id, -28.5, -6.35 + i * 2.54, { role: { GND: 'gnd', VCC: 'vcc', SDA: 'i2c', SCL: 'i2c' }[id] || 'in-digital' })),
       ...['GND', 'OE', 'SCL', 'SDA', 'VCC', 'VP'].map((id, i) => P(id + '2', id === 'VP' ? 'V+' : id, 28.5, -6.35 + i * 2.54, { role: 'pass' })),
       ...Array.from({ length: 16 }, (_, n) => P('PWM' + n, String(n), -19.05 + n * 2.54, 10, { role: 'out-pwm' }))],
@@ -403,7 +403,7 @@ export const PARTS = [
     // 68.6 × 53.3 mm Uno shield. It can't plug onto an ESP32, so SDA/SCL/5V/GND are jumpered from its header sockets.
     id: 'pcas', name: 'PCA9685 16-channel PWM servo shield (Uno size, LED driver)', short: 'Servo shield', pos: [30, 118, 0], option: [['leds', 'rgb'], ['board', 'shield']],
     buy: [1, '16-channel 12-bit PWM servo shield, PCA9685 (Uno size)', 'Same chip and code as the PCA9685 breakout, in Arduino Uno shield form. Wire SDA, SCL, 5V and GND to the ESP32 with jumpers.', 450, 500],
-    info: 'Same PCA9685 chip as the breakout (I2C address 0x40, same Adafruit_PWMServoDriver code), on an Arduino Uno shield. It does not plug onto an ESP32: SDA → GPIO18 and SCL → GPIO23 (top header, next to AREF: its own I2C bus, Wire1), 5V and GND (power header) from the rails. VCC-select jumper on 5V so the green and blue LEDs are bright. Each channel is a 3-pin servo header (PWM / V+ / GND): only the PWM signal pin is used for an LED, and it already has a 220 Ω resistor. The green V+ screw terminal is servo power: leave it empty.',
+    info: 'Same PCA9685 chip as the breakout (I2C address 0x40, same Adafruit_PWMServoDriver code), on an Arduino Uno shield. It does not plug onto an ESP32: SDA, SCL (top header, next to AREF), 5V and GND (power header) are jumpered to the ESP32 and rails. VCC-select jumper on 5V so the green and blue LEDs are bright. Each channel is a 3-pin servo header (PWM / V+ / GND): only the PWM signal pin is used for an LED, and it already has a 220 Ω resistor. The green V+ screw terminal is servo power: leave it empty.',
     pins: [P('SCL', 'SCL', -24, -24.1, { role: 'i2c' }), P('SDA', 'SDA', -21.46, -24.1, { role: 'i2c' }),
       P('VCC', '5V', -9.38, 24.1, { role: 'vcc' }), P('GND', 'GND', -6.84, 24.1, { role: 'gnd' }),
       P('VP', 'V+', -28.5, 4, { kind: 'screw', role: 'in-digital' }),
