@@ -415,7 +415,7 @@ const FAULT_WIRES = [
 const FAULT_BOARD = [
   { id: 'relay5v', label: '5 V relay board needs ~5 V on IN to switch <b>off</b>', see: 'The ESP32’s 3.3 V HIGH leaves the relay ON, so the pump runs all the time. Fix in code: release the pin for OFF (the dry-test sketch on the Tests page does this).' },
   { id: 'trigH', label: 'Relay trigger jumper on <b>H</b> instead of L', see: 'HIGH = on, so the normal code runs the pumps at idle and switches them off on a fire. Move the jumper to L.' },
-  { id: 'noise', label: 'Pump motor noise reaches the LCD', see: 'While a pump runs (or a relay clicks) the LCD text gets garbled until the LCD is re-initialised. The dry-test sketch re-syncs it.' },
+  { id: 'noise', label: 'Pump motor noise reaches the LCD', see: 'While a pump runs (or a relay clicks) the LCD text gets garbled until the LCD is re-initialised, and most DHT22 reads fail. The dry-test sketch re-syncs the LCD and keeps the last good temperature.' },
 ];
 const FAULT_FIX = [
   { id: 'iso', wire: true, label: 'Opto-isolated relay hookup: VCC → 3V3, JD-VCC → 5V, no jumper cap', see: 'The input side runs at the ESP32’s 3.3 V, so its HIGH really switches the relay off (fixes the 5 V relay board problem in hardware). The coils still get 5 V.',
@@ -425,7 +425,8 @@ const FAULT_FIX = [
       if (on) { addWire('relay.VCC', 'rail.3V3_9', '#f08a24', true); addWire('relay.JDVCC', 'rail.5V_9', '#e5392f', true); }
       else { addWire('relay.VCC', 'rail.5V_2', '#e5392f', true); addWire('relay.JDVCC', 'relay.JVCC', '#f2c230', true); }
     } },
-  { id: 'diodes', label: '1N4007 diode across each pump (stripe to red)', see: 'Soaks up the motor’s voltage spikes: the noise above no longer garbles the LCD.' },
+  { id: 'diodes', label: '1N4007 diode across each pump (stripe to red)', see: 'Soaks up the motor’s voltage spikes: the LCD no longer garbles and most DHT22 errors stop.' },
+  { id: 'cap', label: '100 nF ceramic capacitor (“104”) across the DHT22’s VCC and GND', see: 'Smooths the sensor’s supply right at its pins: with the diodes too, no more DHT22 errors while a pump runs.' },
 ];
 const faultWireOn = f => f.isOn ? f.isOn() : f.bad ? !!hasWire(...f.bad) : !hasWire(...f.good);
 function setFaultWire(f, on) {
@@ -439,7 +440,7 @@ function renderFaults() {
   const el = $('faults'), open = el.open;
   const n = FAULT_WIRES.filter(faultWireOn).length + FAULT_BOARD.filter(f => hw.faults[f.id]).length;
   const row = (f, on, kind) => `<label class="frow${on ? ' on' : ''}"><input type="checkbox" data-fault="${kind}:${f.id}" ${on ? 'checked' : ''}><span>${f.label}<small>${f.see}</small></span></label>`;
-  el.innerHTML = `<summary><b>Real-world faults &amp; fixes</b> <span class="mu small">${n ? n + ' fault' + (n > 1 ? 's' : '') + ' on' : 'all off'}${hw.faults.diodes ? ' · diodes fitted' : ''}</span></summary>
+  el.innerHTML = `<summary><b>Real-world faults &amp; fixes</b> <span class="mu small">${n ? n + ' fault' + (n > 1 ? 's' : '') + ' on' : 'all off'}${hw.faults.diodes ? ' · diodes fitted' : ''}${hw.faults.cap ? ' · 100 nF cap fitted' : ''}</span></summary>
     <p class="mu small">Switch on the problems found on the real build to see what they do. Run the sketch, then plug things in, light a fire, or type pump1 in the Serial tab.</p>
     <h5>Wiring</h5>${FAULT_WIRES.map(f => row(f, faultWireOn(f), 'w')).join('')}
     <h5>Relay board &amp; noise</h5>${FAULT_BOARD.map(f => row(f, !!hw.faults[f.id], 'b')).join('')}
@@ -452,7 +453,7 @@ $('faults').addEventListener('change', e => {
   const [kind, id] = k.split(':');
   if (kind === 'w') setFaultWire(FAULT_WIRES.find(f => f.id === id), e.target.checked);
   else if (kind === 'x') setFaultWire(FAULT_FIX.find(f => f.id === id), e.target.checked);
-  else { hw.faults[id] = e.target.checked; if (id === 'diodes' || id === 'noise') hw.lcd.desync = false; try { localStorage.setItem(FAULTS_KEY, JSON.stringify(hw.faults)); } catch { } }
+  else { hw.faults[id] = e.target.checked; if (id === 'diodes' || id === 'noise') hw.lcd.desync = false; if (id === 'cap' || id === 'diodes' || id === 'noise') hw.evaluate(); try { localStorage.setItem(FAULTS_KEY, JSON.stringify(hw.faults)); } catch { } }
   renderFaults();
 });
 $('faults').addEventListener('click', async e => {
@@ -740,6 +741,7 @@ function visuals(o, dt, time) {
   const R = id => parts.get(id).refs;
   const lit = (m, on, k = 2.2) => { m.material.emissiveIntensity = on ? k : 0; };
   lit(R('esp').led2, o.espLed, 3);
+  R('pumpS').diode.visible = R('pumpR').diode.visible = !!hw.faults.diodes; R('dht').cap.visible = !!hw.faults.cap;
   lit(R('relay').pwr, o.relaySig || o.relayWeak, 1.8); lit(R('relay').k1, o.led1); lit(R('relay').k2, o.led2);
   if (o.k1 !== prevK[0] || o.k2 !== prevK[1]) { click(); prevK = [o.k1, o.k2]; }
   lit(R('mq2').dled, o.mqLed); lit(R('flame').dled, o.flameLed);

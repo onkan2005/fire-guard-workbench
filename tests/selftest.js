@@ -554,6 +554,14 @@ void loop() { delay(1000); }
       ok('Pump noise without diodes garbles the LCD', o().sprPump && !/SPR/.test(fg.hw.lcd.rows.join('')), fg.hw.lcd.rows[0]);
       await tog('b:diodes', true); fg.rt.stop(); await wait(100); await fg.run(); await fg.simulate(3000);
       ok('Diodes fitted: LCD stays readable while the pump runs', o().sprPump && /SPR:ON/.test(fg.hw.lcd.rows[0]), fg.hw.lcd.rows[0]);
+      { // DHT22 reads under pump noise: diodes remove most failures, the 100 nF cap the rest
+        fg.rt.stop(); await wait(50); await tog('b:diodes', false); await tog('w:ncR', true); fg.hw.evaluate(); const none = fg.hw.dhtFail;
+        await tog('b:diodes', true); fg.hw.evaluate(); const di = fg.hw.dhtFail;
+        await tog('b:cap', true); fg.hw.evaluate(); const both = fg.hw.dhtFail;
+        ok('Pump noise spoils most DHT22 reads; diodes cut it, diodes + 100 nF cap almost remove it', none > 0.5 && di < none / 4 && both < 0.02, `${none} / ${di} / ${both}`);
+        ok('100 nF cap toggle shows in the panel summary', /cap fitted/.test(document.querySelector('#faults summary').textContent));
+        await tog('b:cap', false); await tog('w:ncR', false); await fg.run();
+      }
       await tog('b:diodes', false); await tog('b:noise', false); fg.world.reset(); await fg.simulate(12000);
       fg.world.ignite(); await fg.simulate(1500);
       await tog('w:jd', true); await fg.simulate(300);

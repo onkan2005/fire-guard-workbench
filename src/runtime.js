@@ -161,8 +161,10 @@ function makeApi(rt) {
       if (!ok) warnOnce('dht' + this.pin, this.started ? `[sim] DHT on GPIO${this.pin}: no sensor answered (check the DATA wire and power). Reads return NaN.` : '[sim] dht.begin() was never called. Reads return NaN.');
       return ok;
     }
-    readTemperature(f = false) { if (!this._ok()) return NaN; let t = Math.min(80, world.temp + noise(0.08)); t = this.type === 11 ? Math.round(t) : Math.round(t * 10) / 10; return f ? t * 1.8 + 32 : t; }
-    readHumidity() { if (!this._ok()) return NaN; const h = world.hum + noise(0.3); return this.type === 11 ? Math.round(h) : Math.round(h * 10) / 10; }
+    // pump motor noise (no diodes) spoils most reads of the DHT22's timing-sensitive one-wire signal
+    _noisy() { return Math.random() < (hw.dhtFail || 0); }
+    readTemperature(f = false) { if (!this._ok() || this._noisy()) return NaN; let t = Math.min(80, world.temp + noise(0.08)); t = this.type === 11 ? Math.round(t) : Math.round(t * 10) / 10; return f ? t * 1.8 + 32 : t; }
+    readHumidity() { if (!this._ok() || this._noisy()) return NaN; const h = world.hum + noise(0.3); return this.type === 11 ? Math.round(h) : Math.round(h * 10) / 10; }
     computeHeatIndex(t) { return t; }
   }
 
@@ -188,7 +190,7 @@ function makeApi(rt) {
       const L = hw.lcd;
       for (let ch of s) {
         // electrical noise from the pumps (no diodes): once a nibble is lost every character comes out wrong
-        if (!L.desync && hw.motorNoise && Math.random() < 0.04) L.desync = true;
+        if (!L.desync && hw.lcdNoise && Math.random() < 0.04) L.desync = true;
         if (L.desync) ch = GARBLE[(ch.charCodeAt(0) * 7 + L.cx * 3 + L.cy) % GARBLE.length];
         if (L.cy >= 0 && L.cy < 4 && L.cx >= 0 && L.cx < 20) L.rows[L.cy] = L.rows[L.cy].slice(0, L.cx) + ch + L.rows[L.cy].slice(L.cx + 1);
         L.cx++;

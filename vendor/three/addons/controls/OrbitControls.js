@@ -494,7 +494,9 @@ class OrbitControls extends EventDispatcher {
 
 		function getZoomScale( delta ) {
 
-			const normalized_delta = Math.abs( delta ) / ( 100 * ( window.devicePixelRatio | 0 ) );
+			// patched: devicePixelRatio < 1 (browser zoomed out) made this divide by 0, so one scroll notch jumped
+			// all the way in or out. Also cap one wheel event at 3 notches so fast wheels/touchpads stay smooth.
+			const normalized_delta = Math.min( 3, Math.abs( delta ) / ( 100 * Math.max( 1, window.devicePixelRatio | 0 ) ) );
 			return Math.pow( 0.95, scope.zoomSpeed * normalized_delta );
 
 		}
@@ -732,13 +734,16 @@ class OrbitControls extends EventDispatcher {
 
 			updateZoomParameters( event.clientX, event.clientY );
 
-			if ( event.deltaY < 0 ) {
+			// patched: Firefox reports lines (deltaMode 1) or pages (2) instead of pixels
+			const dy = event.deltaMode === 1 ? event.deltaY * 33 : event.deltaMode === 2 ? event.deltaY * 800 : event.deltaY;
 
-				dollyIn( getZoomScale( event.deltaY ) );
+			if ( dy < 0 ) {
 
-			} else if ( event.deltaY > 0 ) {
+				dollyIn( getZoomScale( dy ) );
 
-				dollyOut( getZoomScale( event.deltaY ) );
+			} else if ( dy > 0 ) {
+
+				dollyOut( getZoomScale( dy ) );
 
 			}
 

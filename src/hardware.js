@@ -23,12 +23,12 @@ export class Hardware {
       for (const [pre, n] of d.internal || []) for (let i = 1; i < n; i++) this.internal.push([d.id + '.' + pre + '0', d.id + '.' + pre + i]);
       for (const [a, b] of d.links || []) this.internal.push([d.id + '.' + a, d.id + '.' + b]); // pass-through pins on the same board
     }
+    // real-world quirks you can switch on to see them (Build guide → Real-world faults & fixes); kept across runs
+    this.faults = { relay5v: false, trigH: false, noise: false, diodes: false, cap: false };
     this.resetMCU(); this.rebuild();
   }
   resetMCU() {
     this.mcu = { mode: {}, level: {}, i2c: { sda: 21, scl: 22 } };
-    // real-world quirks you can switch on to see them (Build guide → Real-world faults & fixes)
-    this.faults = { relay5v: false, trigH: false, noise: false, diodes: false };
     this.lcd = { rows: [' '.repeat(20), ' '.repeat(20), ' '.repeat(20), ' '.repeat(20)], init: false, backlight: false, cx: 0, cy: 0 };
     this.pixels = new Array(8).fill(0);
     this.sr = { shift: new Array(24).fill(0), out: new Array(24).fill(0) }; // three chained 74HC595
@@ -108,7 +108,10 @@ export class Hardware {
     o.sprPump = pump('pumpS'); o.refPump = pump('pumpR');
     // pump motor noise without flyback diodes: knocks the I2C LCD out of step (garbled until lcd.init())
     const noisy = f.noise && !f.diodes, kk = (o.k1 ? 1 : 0) + (o.k2 ? 2 : 0);
-    this.motorNoise = noisy && (o.sprPump || o.refPump);
+    this.motorNoise = f.noise && (o.sprPump || o.refPump);   // a pump is running and makes noise
+    this.lcdNoise = this.motorNoise && !f.diodes;            // the diodes stop it reaching the LCD
+    // chance that one DHT22 read fails: diodes remove most of it, a 100 nF cap at the sensor the rest
+    this.dhtFail = this.motorNoise ? 0.7 * (f.diodes ? 0.15 : 1) * (f.cap ? 0.1 : 1) : 0;
     if (noisy && this._kk !== undefined && kk !== this._kk && this.lcd.init) this.lcd.desync = true; // relay click spike
     this._kk = kk;
     o.buzz = this.isGround('buzz.N') && (this.netV('buzz.P') ?? 0) > 1.5;

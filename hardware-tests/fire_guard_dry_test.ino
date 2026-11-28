@@ -9,7 +9,8 @@
 //       pump1       run the sprinkler pump for 2 s        pump2   run the refill pump for 2 s
 //       status      print the readings now
 //   - Relay OFF releases the pin instead of driving it to 3.3 V, so 5 V relay boards really switch off.
-//   - If the DHT22 doesn't answer, the LCD shows T:?? DHT22 ERR and the Serial Monitor says what to check.
+//   - If the DHT22 doesn't answer for 6 s, the LCD shows T:?? DHT22 ERR and the Serial Monitor says what to check.
+//     (A single failed read while a pump runs is normal: motor noise. The last good value is kept.)
 //   - The LCD recovers by itself from electrical noise (pump motor, relay clicks): slower I2C, it only
 //     rewrites text that changed, and it re-syncs after every relay click and every 10 s.
 //   - Plus the normal calibration commands: clean, temp 29.5, empty, full, dist, cal, reset.
@@ -85,6 +86,7 @@ String lcdShown[4];            // what each LCD row shows now, so only changed t
 unsigned long lastLcdSync = 0; // when the LCD was last re-synced
 int lastRelays = -1;           // relay outputs last time, to re-sync the LCD after a click
 int dhtFails = 0;              // DHT22 reads in a row that gave no answer (NaN)
+const int DHT_ERR_AFTER = 3;   // pump noise spoils the odd read: keep the last good value, only show an error after 3 in a row (6 s)
 
 
 DHT dht(DHT_PIN, DHT22);
@@ -329,10 +331,10 @@ void loop() {
     if (!isnan(h)) humidity = h;
     if (isnan(t) || isnan(h)) {         // DRY TEST: say so, instead of quietly keeping 28 C / 60 %
       dhtFails++;
-      if (dhtFails == 1 || dhtFails % 5 == 0)
+      if (dhtFails == DHT_ERR_AFTER || (dhtFails > DHT_ERR_AFTER && dhtFails % 5 == 0))
         Serial.println("TEST: DHT22 gives no reading. Check: GND -> GND rail, VCC -> 3V3 rail, DAT -> GPIO4, and that the pins are not swapped.");
     } else {
-      if (dhtFails > 0) Serial.println("TEST: DHT22 is answering again.");
+      if (dhtFails >= DHT_ERR_AFTER) Serial.println("TEST: DHT22 is answering again.");
       dhtFails = 0;
     }
   }
@@ -414,7 +416,7 @@ void loop() {
   String tankName = tankPct <= 5 ? "EMPTY" : tankPct < 35 ? "NEAR EMPTY" : tankPct < 80 ? "HALF" : "FULL";
   lcdLine(0, "SPR:" + String(sprinkler ? (sprLocked ? "3s!" : "ON ") : "OFF") + " REF:" + String(refill ? (refLocked ? "3s!" : "ON ") : "OFF") + " TEST");
   lcdLine(1, "TANK:" + String(tankPct) + "% " + tankName + (fakeTank ? "*" : ""));
-  String th = dhtFails > 0 ? "T:?? DHT22 ERR" : "T:" + String((int)round(temperature)) + "C H:" + String((int)round(humidity)) + "%";
+  String th = dhtFails >= DHT_ERR_AFTER ? "T:?? DHT22 ERR" : "T:" + String((int)round(temperature)) + "C H:" + String((int)round(humidity)) + "%";
   lcdLine(2, th + " " + (flame ? "FIRE" : gas ? "GAS" : "OK"));
   lcdLine(3, "FIRE:" + classNames[cls]);
 

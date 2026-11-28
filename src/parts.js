@@ -157,6 +157,11 @@ export const PARTS = [
       const body = box(g, 16, 7.5, 20, mat('#f1f1ee', { roughness: 0.8 }), -4, TOP, -1);
       decal(g, 14, 18, c => { c.fillStyle = '#9aa0a6'; for (let r = 0; r < 6; r++) for (let k = 0; k < 4; k++) c.fillRect(-6 + k * 3.2, -7.5 + r * 2.8, 2.2, 1.6); }, -4, TOP + 7.52, -1);
       smd(g, 7, 7); smd(g, 7, -7);
+      // 100 nF ceramic capacitor ("104") standing between the GND and VCC pins; shown when the fix is on
+      const cp = new THREE.Group(); cp.position.set(9.6, TOP, -1.27); cp.visible = false; g.add(cp); p.refs.cap = cp;
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 1.1, 18), mat('#d99a2b', { roughness: 0.45 })); disc.rotation.z = Math.PI / 2; disc.position.y = 4.2; cp.add(disc);
+      for (const z of [-1.0, 1.0]) cyl(cp, 0.22, 2.4, METAL(), 0, 0, z, 6);
+      const ct = tag('104', 3, '#ffffff', 'rgba(15,20,25,.85)', '#d99a2b'); ct.position.set(0, 9, 0); cp.add(ct);
     },
   },
   {
@@ -532,6 +537,12 @@ function pumpLeads(p) {
     g.add(shadow(new THREE.Mesh(new THREE.TubeGeometry(c, 40, 0.8, 6), mat(col))));
     cyl(g, 0.55, 3, METAL(), -9, 2, z, 8);
   }
+  // 1N4007 flyback diode across the two leads (silver stripe = cathode, on the red + lead); shown when the fix is on
+  const d = new THREE.Group(); d.position.set(0, 3.2, 0); d.visible = false; g.add(d); p.refs.diode = d;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 3.6, 14), mat('#151515', { roughness: 0.5 })); body.rotation.x = Math.PI / 2; d.add(body);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(1.13, 1.13, 0.6, 14), mat('#d6d9dc', { metalness: 0.4, roughness: 0.4 })); band.rotation.x = Math.PI / 2; band.position.z = -1.3; d.add(band);
+  for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 1.6, 6), METAL()); leg.rotation.x = Math.PI / 2; leg.position.z = s * 2.5; d.add(leg); }
+  const dt = tag('1N4007', 3.2, '#ffffff', 'rgba(15,20,25,.85)', '#d6d9dc'); dt.position.set(0, 4, 0); d.add(dt);
 }
 
 export const EXTRA_BUY = [
