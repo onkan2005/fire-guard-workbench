@@ -71,7 +71,7 @@ const float TANK_FULL_CM  = 2.0;  // ...and full. Calibrate yours: type empty / 
 
 DHT dht(DHT_PIN, DHT22);
 LiquidCrystal_I2C lcd(0x27, 20, 4);
-${RGB ? 'Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40, Wire1);  // PCA9685 on Wire1 (GPIO21/22); the LCD has its own bus\n' : ''}
+${RGB ? 'Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40, Wire1);  // on its own I2C bus (Wire1), away from the LCD\n' : ''}
 float temperature = 28;
 float humidity = 60;
 int gasPpm = 0;
@@ -135,9 +135,8 @@ ${PROBES ? '' : `  tankEmptyCm = prefs.getFloat("tankEmpty", TANK_EMPTY_CM);
   tankFullCm = prefs.getFloat("tankFull", TANK_FULL_CM);
 `}
   dht.begin();
-${RGB ? `  Wire.begin(18, 23);             // LCD on its own I2C bus: SDA 18, SCL 23 (away from the PCA9685)
-  Wire1.begin(21, 22);            // PCA9685 servo shield: SDA 21, SCL 22
-` : '  Wire.begin(21, 22);\n'}  lcd.init();
+  Wire.begin(21, 22);
+${RGB ? '  Wire1.begin(18, 23);            // second I2C bus, PCA9685 only: SDA 18, SCL 23. The LCD keeps 21/22 to itself\n' : ''}  lcd.init();
   lcd.backlight();
 ${RGB ? `  pwm.begin();
   pwm.setPWMFreq(1000);           // 1 kHz: no visible flicker
@@ -379,6 +378,6 @@ export const DEFAULT_SKETCH = buildSketch();
 
 // Fingerprints of every earlier default sketch (all build options). A saved copy that matches one was never
 // edited, so on load it is upgraded to the current default firmware.
-const OLD_DEFAULTS = new Set(['57865066', '0e126950', 'b1f5211f', 'bfae574d', '3fcba65d', '89ee4aeb', 'b56b166f', '82efd895', '5259a80c', '7669663a', '4318b447', '42ffbfc5', '2b267f86', '7910d3a0']);
+const OLD_DEFAULTS = new Set(['b1f5211f', 'bfae574d', '3fcba65d', '89ee4aeb', 'b56b166f', '82efd895', '5259a80c', '7669663a', '4318b447', '42ffbfc5', '2b267f86', '7910d3a0']);
 export const sketchHash = s => { let x = 0x811c9dc5; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 0x01000193) >>> 0; } return x.toString(16).padStart(8, '0'); };
 export const isOldDefault = code => OLD_DEFAULTS.has(sketchHash(code));

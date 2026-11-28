@@ -197,9 +197,8 @@ export class Hardware {
     if (this.connected('div2.IN') || this.connected('div2.OUT')) if (!this.isGround('div2.GND')) add('warn', 'div2', 'Echo divider GND is not connected, so it does not divide: the GPIO sees the full 5 V echo.');
     if (this.connected('div.IN') || this.connected('div.OUT')) if (!this.isGround('div.GND')) add('warn', 'div', 'Divider GND is not connected, so it does not divide: OUT = IN.');
     const sda = this.gpioOn('lcd.SDA'), scl = this.gpioOn('lcd.SCL');
-    const own = this.active && (this.active.has('pca') || this.active.has('pcas')), [eS, eC] = own ? [18, 23] : [21, 22]; // RGB build: LCD on its own bus
-    if (sda === eC && scl === eS) add('warn', 'lcd', `SDA and SCL look swapped (SDA should be GPIO${eS}).`);
-    else if ((sda != null && sda !== eS) || (scl != null && scl !== eC)) add('info', 'lcd', `LCD is on SDA=GPIO${sda}, SCL=GPIO${scl}. Call Wire.begin(${sda}, ${scl}) in setup().`);
+    if (sda === 22 && scl === 21) add('warn', 'lcd', 'SDA and SCL look swapped (SDA should be GPIO21).');
+    else if ((sda != null && sda !== 21) || (scl != null && scl !== 22)) add('info', 'lcd', `LCD is on SDA=GPIO${sda}, SCL=GPIO${scl}. Call Wire.begin(${sda}, ${scl}) in setup().`);
     for (const id of ['pumpS', 'pumpR']) {
       const s = this.supplies(id + '.P');
       if (s.has('5V') || s.has('3V3')) add('error', id, `${id === 'pumpS' ? 'Sprinkler' : 'Refill'} pump is powered from the ESP32. Motor current will brown it out and reset it.`);

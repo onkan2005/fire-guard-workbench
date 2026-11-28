@@ -200,15 +200,16 @@ function addWire(a, b, color, quiet) {
 function removeWire(id) { hw.wires = hw.wires.filter(w => w.id !== id); wires.remove(id); selWire(null); changed(); }
 function changed() { hw.rebuild(); renderGuide(); renderChecks(); if (typeof renderFaults === 'function' && $('faults').innerHTML) renderFaults(); save(); if (typeof tracedWire !== 'undefined' && tracedWire) traceWire(tracedWire); else if (typeof tracedPin !== 'undefined' && tracedPin) traceNet(tracedPin); }
 const pinInBuild = id => { const p = parts.get(id.split('.')[0]); return p && isActive(p); };
-// RGB build: the LCD has its own I2C bus on GPIO18/23 and the PCA9685 uses GPIO21/22 (Wire1). Rewire older RGB saves.
-if ((saved.options || {}).leds === 'rgb' && (saved.wires || []).some(w => /^(lcd|pcas?)\.S(DA|CL)$/.test(w.a) || /^(lcd|pcas?)\.S(DA|CL)$/.test(w.b))
-    && !(saved.wires || []).some(w => [w.a, w.b].includes('lcd.SDA') && [w.a, w.b].includes('esp.18'))) {
-  const i2c = p => /^(lcd|pcas?)\.S(DA|CL)$/.test(p) || /^rail\.S(DA|CL)_/.test(p);
-  saved.wires = saved.wires.filter(w => !i2c(w.a) && !i2c(w.b));
-  const pca = (saved.options.board === 'shield') ? 'pcas' : 'pca';
-  saved.wires.push({ a: 'lcd.SDA', b: 'esp.18', color: '#2b8fd6' }, { a: 'lcd.SCL', b: 'esp.23', color: '#f2c230' },
-    { a: pca + '.SDA', b: 'esp.21', color: '#2b8fd6' }, { a: pca + '.SCL', b: 'esp.22', color: '#f2c230' });
-  migrated.push('the LCD now has its own I2C bus (SDA → GPIO18, SCL → GPIO23); the PCA9685 stays on GPIO21/22');
+// the PCA9685 moved to its own I2C bus (Wire1, SDA 18 / SCL 23): move its SDA/SCL jumpers off the shared breadboard rows
+if ((saved.wires || []).some(w => /^pcas?\.SDA$/.test(w.a) && /^rail\.SDA_/.test(w.b) || /^pcas?\.SDA$/.test(w.b) && /^rail\.SDA_/.test(w.a))) {
+  saved.wires = saved.wires.map(w => {
+    for (const [pin, to] of [['SDA', 'esp.18'], ['SCL', 'esp.23']]) for (const id of ['pca', 'pcas']) {
+      if (w.a === id + '.' + pin && w.b.startsWith('rail.' + pin + '_')) return { ...w, b: to };
+      if (w.b === id + '.' + pin && w.a.startsWith('rail.' + pin + '_')) return { ...w, a: to };
+    }
+    return w;
+  });
+  migrated.push('the PCA9685 now has its own I2C bus (SDA → GPIO18, SCL → GPIO23), so its jumpers moved off the LCD’s SDA/SCL rows');
 }
 // the relay gained its 3-pin JD-VCC header: older saves had no jumper cap, so fit it (as the guide does)
 if ((saved.wires || []).some(w => w.a === 'relay.VCC' || w.b === 'relay.VCC') && !(saved.wires || []).some(w => [w.a, w.b].some(p => p.startsWith('relay.J')))) {
@@ -393,13 +394,8 @@ function setOption(key, val) {
   if (options[key] === val || layoutAnim) return;
   const oldSketch = buildSketch(options), wasRunning = rt.state === 'running';
   insp.close(false); clearTrace(); selWire(null); pending = null; wires.showBand(null);
-  const pairKey = (a, b) => [a, b].sort().join('|');
-  const oldWires = new Set(G().flatMap(st => st.wires.map(([a, b]) => pairKey(a, b))));
   options = { ...options, [key]: val };
   let removed = 0;
-  // guide wires that only the old build had (e.g. the LCD moving to its own bus in the RGB build) come off too
-  const newWires = new Set(G().flatMap(st => st.wires.map(([a, b]) => pairKey(a, b))));
-  for (const w of [...hw.wires]) { const k = pairKey(w.a, w.b); if (oldWires.has(k) && !newWires.has(k)) { hw.wires = hw.wires.filter(x => x !== w); wires.remove(w.id); removed++; } }
   for (const w of [...hw.wires]) if (!pinInBuild(w.a) || !pinInBuild(w.b)) { hw.wires = hw.wires.filter(x => x !== w); wires.remove(w.id); removed++; }
   applyOptions(); hw.rebuild();
   if (removed) for (const st of G()) if (optionKeys(st.option).includes(key)) for (const [a, b, c] of st.wires) if (hw.net.of.get(a) !== hw.net.of.get(b)) { addWire(a, b, c, true); hw.rebuild(); }
