@@ -200,6 +200,17 @@ function addWire(a, b, color, quiet) {
 function removeWire(id) { hw.wires = hw.wires.filter(w => w.id !== id); wires.remove(id); selWire(null); changed(); }
 function changed() { hw.rebuild(); renderGuide(); renderChecks(); if (typeof renderFaults === 'function' && $('faults').innerHTML) renderFaults(); save(); if (typeof tracedWire !== 'undefined' && tracedWire) traceWire(tracedWire); else if (typeof tracedPin !== 'undefined' && tracedPin) traceNet(tracedPin); }
 const pinInBuild = id => { const p = parts.get(id.split('.')[0]); return p && isActive(p); };
+// the PCA9685 moved to its own I2C bus (Wire1, SDA 18 / SCL 23): move its SDA/SCL jumpers off the shared breadboard rows
+if ((saved.wires || []).some(w => /^pcas?\.SDA$/.test(w.a) && /^rail\.SDA_/.test(w.b) || /^pcas?\.SDA$/.test(w.b) && /^rail\.SDA_/.test(w.a))) {
+  saved.wires = saved.wires.map(w => {
+    for (const [pin, to] of [['SDA', 'esp.18'], ['SCL', 'esp.23']]) for (const id of ['pca', 'pcas']) {
+      if (w.a === id + '.' + pin && w.b.startsWith('rail.' + pin + '_')) return { ...w, b: to };
+      if (w.b === id + '.' + pin && w.a.startsWith('rail.' + pin + '_')) return { ...w, a: to };
+    }
+    return w;
+  });
+  migrated.push('the PCA9685 now has its own I2C bus (SDA → GPIO18, SCL → GPIO23), so its jumpers moved off the LCD’s SDA/SCL rows');
+}
 // the relay gained its 3-pin JD-VCC header: older saves had no jumper cap, so fit it (as the guide does)
 if ((saved.wires || []).some(w => w.a === 'relay.VCC' || w.b === 'relay.VCC') && !(saved.wires || []).some(w => [w.a, w.b].some(p => p.startsWith('relay.J')))) {
   saved.wires.push({ a: 'relay.JDVCC', b: 'relay.JVCC', color: '#f2c230' });

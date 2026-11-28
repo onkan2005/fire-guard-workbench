@@ -204,9 +204,10 @@ function makeApi(rt) {
 
   // Adafruit PWM Servo Driver library (PCA9685, I2C address 0x40 by default)
   class Adafruit_PWMServoDriver {
-    constructor(addr = 0x40) { this.addr = addr; this.freq = 200; }
+    constructor(addr = 0x40, wire) { this.addr = addr; this.freq = 200; this.bus = wire && wire._bus ? wire._bus : 0; }
     _link() {
-      const { sda, scl } = mcu.i2c;
+      if (this.bus === 1 && !mcu.i2c1) { warnOnce('pca1', '[sim] The PCA9685 is on Wire1, but Wire1.begin(sda, scl) was never called.'); return false; }
+      const { sda, scl } = this.bus === 1 ? mcu.i2c1 : mcu.i2c;
       const id = hw.active && hw.active.has('pcas') ? 'pcas' : 'pca'; // breakout or servo shield: same chip
       const ok = this.addr === 0x40 && hw.gpioOn(id + '.SDA') === sda && hw.gpioOn(id + '.SCL') === scl && hw.vcc(id) >= 2.3;
       if (!ok) warnOnce('pca', `[sim] I2C: no PCA9685 answered at 0x${this.addr.toString(16).toUpperCase()} on SDA=GPIO${sda}, SCL=GPIO${scl}.` + (this.addr !== 0x40 ? ' This board is at 0x40.' : ' Check its SDA/SCL wires and power.'));
@@ -254,7 +255,8 @@ function makeApi(rt) {
     DEC: 10, HEX: 16, BIN: 2, OCT: 8, PI: Math.PI, HALF_PI: Math.PI / 2, TWO_PI: Math.PI * 2, DEG_TO_RAD: Math.PI / 180, RAD_TO_DEG: 180 / Math.PI,
     A0: 36, A3: 39, A4: 32, A5: 33, A6: 34, A7: 35, ADC_0db: 0, ADC_2_5db: 1, ADC_6db: 2, ADC_11db: 3, WL_CONNECTED: 3, WIFI_STA: 1,
     Serial, DHT, LiquidCrystal_I2C, Adafruit_NeoPixel, Adafruit_PWMServoDriver, Preferences,
-    Wire: { begin(sda, scl) { if (sda != null && scl != null) mcu.i2c = { sda, scl }; }, setClock() { } },
+    Wire: { _bus: 0, begin(sda, scl) { if (sda != null && scl != null) mcu.i2c = { sda, scl }; }, setClock() { } },
+    Wire1: { _bus: 1, begin(sda, scl) { mcu.i2c1 = { sda: sda ?? 18, scl: scl ?? 23 }; }, setClock() { } },
     WiFi: { begin() { warnOnce('wifi', '[sim] Wi-Fi is not simulated; pretending to be connected.'); }, status: () => 3, mode() { }, disconnect() { }, localIP: () => '192.168.4.2', RSSI: () => -55 },
     pinMode(p, m) {
       if (!pin(p)) return;
