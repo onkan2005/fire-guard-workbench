@@ -200,6 +200,11 @@ function addWire(a, b, color, quiet) {
 function removeWire(id) { hw.wires = hw.wires.filter(w => w.id !== id); wires.remove(id); selWire(null); changed(); }
 function changed() { hw.rebuild(); renderGuide(); renderChecks(); if (typeof renderFaults === 'function' && $('faults').innerHTML) renderFaults(); save(); if (typeof tracedWire !== 'undefined' && tracedWire) traceWire(tracedWire); else if (typeof tracedPin !== 'undefined' && tracedPin) traceNet(tracedPin); }
 const pinInBuild = id => { const p = parts.get(id.split('.')[0]); return p && isActive(p); };
+// the relay gained its 3-pin JD-VCC header: older saves had no jumper cap, so fit it (as the guide does)
+if ((saved.wires || []).some(w => w.a === 'relay.VCC' || w.b === 'relay.VCC') && !(saved.wires || []).some(w => [w.a, w.b].some(p => p.startsWith('relay.J')))) {
+  saved.wires.push({ a: 'relay.JDVCC', b: 'relay.JVCC', color: '#f2c230' });
+  migrated.push('the relay board now shows its JD-VCC / VCC / GND header; the jumper cap (JD-VCC–VCC) was fitted so the relays still click');
+}
 // the buzzer used to be a 3-pin module (VCC/SIG/GND); it is now a bare 2-pin buzzer: swap its old jumpers for the new ones
 if ((saved.wires || []).some(w => /^buzz\.(VCC|SIG|GND)$/.test(w.a) || /^buzz\.(VCC|SIG|GND)$/.test(w.b))) {
   saved.wires = saved.wires.filter(w => !/^buzz\./.test(w.a) && !/^buzz\./.test(w.b));
@@ -404,6 +409,7 @@ const FAULT_WIRES = [
   { id: 'ncS', label: 'Sprinkler pump red on <b>NC</b> instead of NO', see: 'Pump runs whenever the relay is off, even with the ESP32 unplugged.', bad: ['relay.NC1', 'pumpS.P'], good: ['relay.NO1', 'pumpS.P'], color: '#e5392f' },
   { id: 'ncR', label: 'Refill pump red on <b>NC</b> instead of NO', see: 'Same for the refill pump.', bad: ['relay.NC2', 'pumpR.P'], good: ['relay.NO2', 'pumpR.P'], color: '#e5392f' },
   { id: 'batN', label: 'Battery black (−) lead unplugged', see: 'The pump circuit is open: no pump can run, whatever the relay does.', good: ['psu.GND', 'rail.BATN_0'], color: '#222428' },
+  { id: 'jd', label: 'Relay <b>JD-VCC jumper cap</b> missing', see: 'The relay LEDs still light, but the coils get no power: no click, the pumps never run on NO.', good: ['relay.JDVCC', 'relay.JVCC'], color: '#f2c230' },
   { id: 'batP', label: 'Battery red (+) lead unplugged', see: 'Same: the safe way to cut pump power (the holder has no switch).', good: ['psu.VCC', 'rail.BATP_0'], color: '#e5392f' },
 ];
 const FAULT_BOARD = [
@@ -412,10 +418,18 @@ const FAULT_BOARD = [
   { id: 'noise', label: 'Pump motor noise reaches the LCD', see: 'While a pump runs (or a relay clicks) the LCD text gets garbled until the LCD is re-initialised. The dry-test sketch re-syncs it.' },
 ];
 const FAULT_FIX = [
+  { id: 'iso', wire: true, label: 'Opto-isolated relay hookup: VCC → 3V3, JD-VCC → 5V, no jumper cap', see: 'The input side runs at the ESP32’s 3.3 V, so its HIGH really switches the relay off (fixes the 5 V relay board problem in hardware). The coils still get 5 V.',
+    isOn: () => hw.supplies('relay.VCC').has('3V3') && hw.supplies('relay.JDVCC').has('5V') && !hasWire('relay.JDVCC', 'relay.JVCC'),
+    apply(on) {
+      for (const w of hw.wires.filter(w => [w.a, w.b].includes('relay.VCC') || [w.a, w.b].includes('relay.JDVCC') || [w.a, w.b].includes('relay.JVCC'))) { hw.wires = hw.wires.filter(x => x !== w); wires.remove(w.id); }
+      if (on) { addWire('relay.VCC', 'rail.3V3_9', '#f08a24', true); addWire('relay.JDVCC', 'rail.5V_9', '#e5392f', true); }
+      else { addWire('relay.VCC', 'rail.5V_2', '#e5392f', true); addWire('relay.JDVCC', 'relay.JVCC', '#f2c230', true); }
+    } },
   { id: 'diodes', label: '1N4007 diode across each pump (stripe to red)', see: 'Soaks up the motor’s voltage spikes: the noise above no longer garbles the LCD.' },
 ];
-const faultWireOn = f => f.bad ? !!hasWire(...f.bad) : !hasWire(...f.good);
+const faultWireOn = f => f.isOn ? f.isOn() : f.bad ? !!hasWire(...f.bad) : !hasWire(...f.good);
 function setFaultWire(f, on) {
+  if (f.apply) { f.apply(on); changed(); return; }
   const rm = on ? f.good : f.bad, add = on ? f.bad : f.good;
   if (rm) { const w = hasWire(...rm); if (w) { hw.wires = hw.wires.filter(x => x !== w); wires.remove(w.id); } }
   if (add) addWire(add[0], add[1], f.color, true);
@@ -429,7 +443,7 @@ function renderFaults() {
     <p class="mu small">Switch on the problems found on the real build to see what they do. Run the sketch, then plug things in, light a fire, or type pump1 in the Serial tab.</p>
     <h5>Wiring</h5>${FAULT_WIRES.map(f => row(f, faultWireOn(f), 'w')).join('')}
     <h5>Relay board &amp; noise</h5>${FAULT_BOARD.map(f => row(f, !!hw.faults[f.id], 'b')).join('')}
-    <h5>Fixes</h5>${FAULT_FIX.map(f => row(f, !!hw.faults[f.id], 'b')).join('')}
+    <h5>Fixes</h5>${FAULT_FIX.map(f => f.wire ? row(f, faultWireOn(f), 'x') : row(f, !!hw.faults[f.id], 'b')).join('')}
     <div class="row wrap"><button class="sm" id="faultDry">Load the dry-test code (has the code fixes)</button><button class="sm" id="faultReset">All off</button></div>`;
   el.open = open;
 }
@@ -437,13 +451,15 @@ $('faults').addEventListener('change', e => {
   const k = e.target.dataset.fault; if (!k) return;
   const [kind, id] = k.split(':');
   if (kind === 'w') setFaultWire(FAULT_WIRES.find(f => f.id === id), e.target.checked);
+  else if (kind === 'x') setFaultWire(FAULT_FIX.find(f => f.id === id), e.target.checked);
   else { hw.faults[id] = e.target.checked; if (id === 'diodes' || id === 'noise') hw.lcd.desync = false; try { localStorage.setItem(FAULTS_KEY, JSON.stringify(hw.faults)); } catch { } }
   renderFaults();
 });
 $('faults').addEventListener('click', async e => {
   if (e.target.id === 'faultReset') {
     for (const f of FAULT_WIRES) if (faultWireOn(f)) setFaultWire(f, false);
-    for (const f of [...FAULT_BOARD, ...FAULT_FIX]) hw.faults[f.id] = false;
+    for (const f of FAULT_FIX) if (f.wire && faultWireOn(f)) setFaultWire(f, false);
+    for (const f of [...FAULT_BOARD, ...FAULT_FIX]) if (!f.wire) hw.faults[f.id] = false;
     hw.lcd.desync = false; try { localStorage.setItem(FAULTS_KEY, JSON.stringify(hw.faults)); } catch { }
     renderFaults();
   }
@@ -724,7 +740,7 @@ function visuals(o, dt, time) {
   const R = id => parts.get(id).refs;
   const lit = (m, on, k = 2.2) => { m.material.emissiveIntensity = on ? k : 0; };
   lit(R('esp').led2, o.espLed, 3);
-  lit(R('relay').pwr, o.relayPowered || o.relayWeak, 1.8); lit(R('relay').k1, o.k1); lit(R('relay').k2, o.k2);
+  lit(R('relay').pwr, o.relaySig || o.relayWeak, 1.8); lit(R('relay').k1, o.led1); lit(R('relay').k2, o.led2);
   if (o.k1 !== prevK[0] || o.k2 !== prevK[1]) { click(); prevK = [o.k1, o.k2]; }
   lit(R('mq2').dled, o.mqLed); lit(R('flame').dled, o.flameLed);
   R('panel').leds.forEach(({ m, h }, i) => {

@@ -83,12 +83,18 @@ export class Hardware {
   // ---------- what the outside world sees right now ----------
   evaluate() {
     const o = {}, w = this.world;
-    const rv = this.vcc('relay'); o.relayPowered = rv >= 4.5; o.relayWeak = rv > 0 && rv < 4.5;
+    // input side (4-pin VCC/GND: optocouplers + LEDs) and coil side (JD-VCC) are powered separately
+    const rv = this.vcc('relay'), coil = this.isGround('relay.GND') ? (this.netV('relay.JDVCC') ?? 0) : 0;
+    o.relaySig = rv >= 3; o.relayCoil = coil >= 4.5; o.relayPowered = o.relaySig && o.relayCoil; o.relayWeak = rv > 0 && rv < 3;
     const f = this.faults;
     // IN floating (pin released) = off: the board's own resistor pulls it to its idle level.
     // L trigger: LOW = on. A 5 V board that needs ~5 V to switch off also stays on at the ESP32's 3.3 V HIGH.
     // H trigger: HIGH = on.
-    for (const k of [1, 2]) { const v = this.netV('relay.IN' + k); o['k' + k] = o.relayPowered && v != null && (f.trigH ? v > 2 : v < (f.relay5v ? 4 : 1.2)); }
+    // the LED lights when IN is active (input side only); the relay only clicks if the coil also has 5 V on JD-VCC
+    for (const k of [1, 2]) {
+      const v = this.netV('relay.IN' + k), act = o.relaySig && v != null && (f.trigH ? v > 2 : v < (f.relay5v ? rv - 1 : 1.2));
+      o['led' + k] = act; o['k' + k] = act && o.relayCoil;
+    }
     const links = this.links();
     links.push(o.k1 ? ['relay.COM1', 'relay.NO1'] : ['relay.COM1', 'relay.NC1']);
     links.push(o.k2 ? ['relay.COM2', 'relay.NO2'] : ['relay.COM2', 'relay.NC2']);
@@ -157,7 +163,7 @@ export class Hardware {
       const id = p.split('.')[0], name = PIN_GPIO[p] !== undefined ? 'GPIO' + PIN_GPIO[p] : this.label[p] || p;
       add('warn', id, `${name} has ${n} jumpers on one pin, which won't fit on the real board. Run one jumper to a breadboard row (SDA/SCL, 6V+/6V−, or a power rail) and plug the others into the same row.`);
     }
-    const NEED5 = { us: 'the HC-SR04 needs 5 V and will not echo reliably', mq2: 'its heater needs 5 V, readings will be far too low', relay: 'the relay coils need 5 V and will not click', lcd: 'the text will be very faint' };
+    const NEED5 = { us: 'the HC-SR04 needs 5 V and will not echo reliably', mq2: 'its heater needs 5 V, readings will be far too low', lcd: 'the text will be very faint' };
     for (const d of PARTS) {
       if (['esp', 'rail', 'pumpS', 'pumpR', 'div'].includes(d.id) || (this.active && !this.active.has(d.id))) continue;
       const hasV = d.pins.some(p => p.id === 'VCC') && d.pins.some(p => p.id === 'GND'); // pull-up boards have no GND pin
@@ -194,6 +200,12 @@ export class Hardware {
       const s = this.supplies(id + '.P');
       if (s.has('5V') || s.has('3V3')) add('error', id, `${id === 'pumpS' ? 'Sprinkler' : 'Refill'} pump is powered from the ESP32. Motor current will brown it out and reset it.`);
       else if (s.has('PSU')) add('warn', id, `${id === 'pumpS' ? 'Sprinkler' : 'Refill'} pump is wired straight to the battery, so it is always on. Go through the relay NO terminal.`);
+    }
+    if (on('relay') && (this.connected('relay.IN1') || this.connected('relay.IN2'))) {
+      const jd = this.isGround('relay.GND') ? (this.netV('relay.JDVCC') ?? 0) : 0, sv = this.vcc('relay');
+      if (!this.connected('relay.JDVCC')) add('warn', 'relay', 'Relay JD-VCC is not connected, so the coils get no power: the LEDs light but the relays never click. Put the jumper cap on JD-VCC–VCC (3-pin header), or wire JD-VCC to the 5V rail.');
+      else if (jd > 0 && jd < 4.5) add('warn', 'relay', `Relay JD-VCC is on ${jd.toFixed(1)} V: the coils need 5 V and will not click.`);
+      if (sv > 0 && sv < 4 && jd >= 4.5) add('info', 'relay', 'Opto-isolated hookup: relay VCC on 3.3 V, JD-VCC on 5 V. The ESP32’s HIGH switches the relays off reliably.');
     }
     for (const k of [1, 2]) if (this.connected('relay.NC' + k)) add('info', 'relay', `NC${k} is closed while the relay is OFF. You probably want NO${k}.`);
     if (this.connected('psu.GND') && !this.supplies('psu.GND').has('GND')) add('warn', 'psu', 'Battery − is not joined to the ESP32 GND. Join it to the GND rail (common ground).');

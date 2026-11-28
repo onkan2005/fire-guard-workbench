@@ -273,20 +273,22 @@ export const PARTS = [
   {
     id: 'relay', name: '2-channel relay module', short: 'Relay', pos: [118, -78, 0],
     buy: [1, '2-channel 5 V relay module (opto-isolated)', 'Lets the ESP32 switch the two pumps, which run on their own 5 V supply. IN1 = sprinkler, IN2 = refill.', 90, 150],
-    info: 'Active-LOW inputs: writing LOW to IN energises the relay. COM connects to NO while energised. Needs 5 V on VCC.',
-    pins: [P('GND', 'GND', -22, -3.81, { role: 'gnd' }), P('IN1', 'IN1', -22, -1.27, { role: 'in-digital' }), P('IN2', 'IN2', -22, 1.27, { role: 'in-digital' }), P('VCC', 'VCC', -22, 3.81, { role: 'vcc' }),
+    info: 'Active-LOW inputs: writing LOW to IN energises the relay. COM connects to NO while energised. Two headers: the 4-pin one (GND, IN1, IN2, VCC) is the input side; the 3-pin one (JD-VCC, VCC, GND) powers the relay coils. JD-VCC must get 5 V: put the jumper cap on JD-VCC–VCC (VCC on 5V), or for full isolation remove the cap, feed JD-VCC from 5V and the 4-pin VCC from 3.3 V. Without JD-VCC the LEDs light but the relays never click.',
+    links: [['JVCC', 'VCC'], ['JGND', 'GND']],
+    pins: [P('JDVCC', 'JD-VCC', -22, -17.5, { role: 'vcc', tip: 'Relay coil power. Needs 5 V: jumper cap to the VCC pin next to it, or a wire from the 5V rail.' }), P('JVCC', 'VCC', -22, -14.96, { role: 'vcc', tip: 'Same as the 4-pin header VCC (joined on the board).' }), P('JGND', 'GND', -22, -12.42, { role: 'gnd', tip: 'Same as the 4-pin header GND.' }),
+      P('GND', 'GND', -22, -3.81, { role: 'gnd' }), P('IN1', 'IN1', -22, -1.27, { role: 'in-digital' }), P('IN2', 'IN2', -22, 1.27, { role: 'in-digital' }), P('VCC', 'VCC', -22, 3.81, { role: 'vcc' }),
       P('NO1', 'NO1', 21, -15, { kind: 'screw', role: 'contact' }), P('COM1', 'COM1', 21, -10, { kind: 'screw', role: 'contact' }), P('NC1', 'NC1', 21, -5, { kind: 'screw', role: 'contact' }),
       P('NO2', 'NO2', 21, 5, { kind: 'screw', role: 'contact' }), P('COM2', 'COM2', 21, 10, { kind: 'screw', role: 'contact' }), P('NC2', 'NC2', 21, 15, { kind: 'screw', role: 'contact' })],
     build(p) {
       const g = p.inner;
-      pcb(g, 52, 40, '#1d4ea0', c => { hdrLabels(c, p.def.pins.slice(0, 4), 2.4, 1.6); txt(c, 'K1', -4, -16, 1.8); txt(c, 'K2', -4, 18, 1.8); txt(c, '2 Relay Module', -9, 0, 1.7); p.def.pins.slice(4).forEach(q => txt(c, q.label, 14.5, q.z, 1.3, '#fff', 'right')); });
+      pcb(g, 52, 40, '#1d4ea0', c => { hdrLabels(c, p.def.pins.slice(0, 7), 2.4, 1.6); txt(c, 'K1', -4, -16, 1.8); txt(c, 'K2', -4, 18, 1.8); txt(c, '2 Relay Module', -9, 0, 1.7); p.def.pins.slice(7).forEach(q => txt(c, q.label, 14.5, q.z, 1.3, '#fff', 'right')); });
       for (const z of [-10, 10]) {
         box(g, 19, 15.5, 15, mat('#2f6fe0', { roughness: 0.35 }), 3, TOP, z);
         decal(g, 17, 13, c => { txt(c, 'SRD-05VDC-SL-C', 0, -3, 1.4, '#e8f0ff'); txt(c, '10A 250VAC', 0, 0, 1.3, '#e8f0ff'); txt(c, 'SONGLE', 0, 3.5, 1.8, '#e8f0ff', 'center', 800); }, 3, TOP + 15.52, z);
         box(g, 6, 3.5, 4, mat('#f2f2f2'), -14, TOP, z); // optocoupler
       }
       screwBlock(g, 21, -10, 3, 5); screwBlock(g, 21, 10, 3, 5);
-      p.refs.k1 = led(g, -16, -15, '#ff2020'); p.refs.k2 = led(g, -16, 15, '#ff2020'); p.refs.pwr = led(g, -16, 0, '#ff2020');
+      p.refs.k1 = led(g, -9, -16, '#ff2020'); p.refs.k2 = led(g, -9, 16, '#ff2020'); p.refs.pwr = led(g, -9, -6.5, '#ff2020');
     },
   },
   {
